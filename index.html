@@ -950,7 +950,7 @@ function AddProjectModal({ onClose, onCreate }) {
           <label style={{fontSize:12,fontWeight:600,color:'#6b7280',display:'block',marginBottom:8}}>Color</label>
           <div style={{display:'flex',gap:8,marginBottom:20}}>
             {GRP_COLORS.map(c=>(
-              <button key={c} onClick={()=>setColor(c)} style={{width:24,height:24,borderRadius:'50%',background:c,border:c===color?'2px solid #1e1b4b':'2px solid transparent',cursor:'pointer',outline:c===color?'2px solid #6366f1':none,outlineOffset:2}}/>
+              <button key={c} onClick={()=>setColor(c)} style={{width:24,height:24,borderRadius:'50%',background:c,border:c===color?'2px solid #1e1b4b':'2px solid transparent',cursor:'pointer',outline:c===color?'2px solid #6366f1':'none',outlineOffset:2}}/>
             ))}
           </div>
           <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
