@@ -1,0 +1,18 @@
+# Netlify configuration
+# This tells Netlify to serve index.html for all routes
+# and enables the SPA to handle its own URL hash routing
+
+[build]
+  publish = "."
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

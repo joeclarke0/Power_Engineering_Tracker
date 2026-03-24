@@ -1,0 +1,19 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local environment (never commit credentials)
+.env
+.env.local
+*.env
+
+# Node (if you ever migrate to a build-based setup)
+node_modules/
+dist/
+.cache/

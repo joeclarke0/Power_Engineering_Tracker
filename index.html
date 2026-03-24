@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataFlow — Engineering Task Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { height: 100%; width: 100%; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f6f8; color: #323338; overflow: hidden; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+    input, textarea, select, button { font-family: inherit; }
+    button { cursor: pointer; border: none; background: none; }
+    a { text-decoration: none; color: inherit; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+/* ================================================================
+   CONSTANTS
+================================================================ */
+const STATUSES = ['Not Started', 'In Progress', 'Review', 'Done', 'Blocked'];
+const STATUS_CFG = {
+  'Not Started': { bg: '#f0f0f0',  text: '#666',    dot: '#aaa',    border: '#ccc' },
+  'In Progress': { bg: '#dbeafe',  text: '#1d4ed8', dot: '#3b82f6', border: '#93c5fd' },
+  'Review':      { bg: '#fef3c7',  text: '#92400e', dot: '#f59e0b', border: '#fcd34d' },
+  'Done':        { bg: '#d1fae5',  text: '#065f46', dot: '#10b981', border: '#6ee7b7' },
+  'Blocked':     { bg: '#fee2e2',  text: '#991b1b', dot: '#ef4444', border: '#fca5a5' },
+};
+
+const PRIORITIES = ['Critical', 'High', 'Medium', 'Low'];
+const PRIORITY_CFG = {
+  'Critical': { color: '#ef4444', bg: '#fee2e2' },
+  'High':     { color: '#f97316', bg: '#ffedd5' },
+  'Medium':   { color: '#3b82f6', bg: '#dbeafe' },
+  'Low':      { color: '#9ca3af', bg: '#f3f4f6' },
+};
+
+const GRP_COLORS = ['#3b82f6','#ef4444','#f97316','#10b981','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f59e0b','#6366f1'];
+
+/* ================================================================
+   CONFIG — stored in localStorage, shareable via URL hash
+================================================================ */
+function loadConfig() {
+  try {
+    const hash = window.location.hash;
+    if (hash.startsWith('#cfg=')) {
+      const cfg = JSON.parse(atob(hash.slice(5)));
+      if (cfg.url && cfg.key) {
+        localStorage.setItem('df_cfg', JSON.stringify(cfg));
+        history.replaceState(null, null, window.location.pathname);
+        return cfg;
+      }
+    }
+  } catch(e) {}
+  try {
+    const s = localStorage.getItem('df_cfg');
+    if (s) return JSON.parse(s);
+  } catch(e) {}
+  return null;
+}
+
+function saveConfig(url, key) {
+  const cfg = { url, key };
+  localStorage.setItem('df_cfg', JSON.stringify(cfg));
+  return cfg;
+}
+
+function getShareLink() {
+  const s = localStorage.getItem('df_cfg');
+  if (!s) return null;
+  return `${window.location.origin}${window.location.pathname}#cfg=${btoa(s)}`;
+}
+
+/* ================================================================
+   SUPABASE CLIENT
+================================================================ */
+let _db = null;
+function getDB() { return _db; }
+function initDB(url, key) {
+  _db = window.supabase.createClient(url, key);
+  return _db;
+}
+
+/* ================================================================
+   API LAYER
+================================================================ */
+const api = {
+  // Projects
+  async getProjects()                  { const {data,error}=await getDB().from('projects').select('*').order('created_at'); if(error)throw error; return data||[]; },
+  async createProject(name,color)      { const {data,error}=await getDB().from('projects').insert({name,color}).select().single(); if(error)throw error; return data; },
+  async updateProject(id,u)            { const {data,error}=await getDB().from('projects').update(u).eq('id',id).select().single(); if(error)throw error; return data; },
+  async deleteProject(id)              { const {error}=await getDB().from('projects').delete().eq('id',id); if(error)throw error; },
+
+  // Groups
+  async getGroups(projectId)           { const {data,error}=await getDB().from('task_groups').select('*').eq('project_id',projectId).order('position'); if(error)throw error; return data||[]; },
+  async createGroup(projectId,name,color,pos) { const {data,error}=await getDB().from('task_groups').insert({project_id:projectId,name,color,position:pos}).select().single(); if(error)throw error; return data; },
+  async updateGroup(id,u)              { const {data,error}=await getDB().from('task_groups').update(u).eq('id',id).select().single(); if(error)throw error; return data; },
+  async deleteGroup(id)                { const {error}=await getDB().from('task_groups').delete().eq('id',id); if(error)throw error; },
+
+  // Tasks
+  async getTasks(projectId)            { const {data,error}=await getDB().from('tasks').select('*').eq('project_id',projectId).order('position'); if(error)throw error; return data||[]; },
+  async createTask(groupId,projectId,name,pos) { const {data,error}=await getDB().from('tasks').insert({group_id:groupId,project_id:projectId,name,position:pos,status:'Not Started',priority:'Medium'}).select().single(); if(error)throw error; return data; },
+  async updateTask(id,u)               { const {data,error}=await getDB().from('tasks').update({...u,updated_at:new Date().toISOString()}).eq('id',id).select().single(); if(error)throw error; return data; },
+  async deleteTask(id)                 { const {error}=await getDB().from('tasks').delete().eq('id',id); if(error)throw error; },
+
+  // Activities
+  async getActivities(taskId)          { const {data,error}=await getDB().from('activities').select('*').eq('task_id',taskId).order('created_at',{ascending:false}); if(error)throw error; return data||[]; },
+  async addActivity(taskId,type,content,author='You',oldVal=null,newVal=null) { const {data,error}=await getDB().from('activities').insert({task_id:taskId,type,content,author,old_value:oldVal,new_value:newVal}).select().single(); if(error)throw error; return data; },
+
+  // Members
+  async getMembers()                   { const {data,error}=await getDB().from('team_members').select('*').order('name'); if(error)throw error; return data||[]; },
+  async createMember(name,role,color)  { const {data,error}=await getDB().from('team_members').insert({name,role,color}).select().single(); if(error)throw error; return data; },
+};
+
+/* ================================================================
+   UTILS
+================================================================ */
+function fmtDate(d) {
+  if (!d) return '';
+  return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric' });
+}
+function fmtDateFull(d) {
+  if (!d) return '';
+  return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
+function isOverdue(d) {
+  if (!d) return false;
+  const t = new Date(); t.setHours(0,0,0,0);
+  return new Date(d + 'T12:00:00') < t;
+}
+function timeAgo(s) {
+  const diff = Date.now() - new Date(s).getTime();
+  const m = Math.floor(diff/60000);
+  if (m<1) return 'just now';
+  if (m<60) return `${m}m ago`;
+  const h = Math.floor(m/60);
+  if (h<24) return `${h}h ago`;
+  const day = Math.floor(h/24);
+  if (day<7) return `${day}d ago`;
+  return fmtDateFull(s.split('T')[0]);
+}
+function initials(name) {
+  if (!name) return '?';
+  return name.split(' ').filter(Boolean).map(n=>n[0].toUpperCase()).slice(0,2).join('');
+}
+function colorForName(name) {
+  if (!name) return '#9ca3af';
+  let h=0; for(let c of name) h=((h<<5)-h)+c.charCodeAt(0);
+  return GRP_COLORS[Math.abs(h)%GRP_COLORS.length];
+}
+function generateId() { return Math.random().toString(36).substr(2,9); }
+
+/* ================================================================
+   ATOMS
+================================================================ */
+function Avatar({ name, color, size=28, title: ttl }) {
+  return (
+    <div title={ttl||name} style={{width:size,height:size,borderRadius:'50%',background:color||colorForName(name),color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:size*0.38,fontWeight:700,flexShrink:0}}>
+      {initials(name)}
+    </div>
+  );
+}
+
+function useOutsideClick(ref, cb) {
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) cb(); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [cb]);
+}
+
+function Portal({ children }) {
+  return ReactDOM.createPortal(children, document.body);
+}
+
+function StatusChip({ value, onChange, size='sm' }) {
+  const [open,setOpen] = useState(false);
+  const ref = useRef();
+  const cfg = STATUS_CFG[value]||STATUS_CFG['Not Started'];
+  const close = useCallback(()=>setOpen(false),[]);
+  useOutsideClick(ref, close);
+  const fs = size==='sm' ? 11 : 13;
+  const px = size==='sm' ? '4px 10px' : '6px 14px';
+  return (
+    <div ref={ref} style={{position:'relative',display:'inline-flex'}}>
+      <button onClick={()=>onChange&&setOpen(!open)} style={{background:cfg.bg,color:cfg.text,padding:px,borderRadius:20,fontSize:fs,fontWeight:700,display:'inline-flex',alignItems:'center',gap:5,cursor:onChange?'pointer':'default',whiteSpace:'nowrap',border:'none',minWidth:size==='sm'?100:120,justifyContent:'center'}}>
+        <span style={{width:6,height:6,borderRadius:'50%',background:cfg.dot,flexShrink:0}}/>
+        {value}
+        {onChange && <span style={{fontSize:9,opacity:0.6,marginLeft:2}}>▾</span>}
+      </button>
+      {open && (
+        <Portal>
+          <StatusDropdown anchor={ref} value={value} onChange={v=>{onChange(v);setOpen(false);}} onClose={close}/>
+        </Portal>
+      )}
+    </div>
+  );
+}
+
+function StatusDropdown({ anchor, value, onChange, onClose }) {
+  const ref = useRef();
+  const [pos,setPos] = useState({top:0,left:0});
+  useOutsideClick(ref, onClose);
+  useEffect(()=>{
+    if(anchor.current){
+      const r=anchor.current.getBoundingClientRect();
+      setPos({top:r.bottom+4,left:r.left});
+    }
+  },[]);
+  return (
+    <div ref={ref} style={{position:'fixed',top:pos.top,left:pos.left,zIndex:99999,background:'#fff',border:'1px solid #e5e7eb',borderRadius:10,boxShadow:'0 10px 30px rgba(0,0,0,0.13)',padding:'4px 0',minWidth:175}}>
+      <div style={{padding:'6px 12px 3px',fontSize:10,color:'#9ca3af',fontWeight:700,letterSpacing:'0.06em',textTransform:'uppercase'}}>Set Status</div>
+      {STATUSES.map(s=>{
+        const c=STATUS_CFG[s];
+        return <DropItem key={s} active={s===value} onClick={()=>onChange(s)} icon={<span style={{width:8,height:8,borderRadius:'50%',background:c.dot,display:'inline-block'}}/>} label={s}/>;
+      })}
+    </div>
+  );
+}
+
+function PriorityChip({ value, onChange, size='sm' }) {
+  const [open,setOpen] = useState(false);
+  const ref = useRef();
+  const cfg = PRIORITY_CFG[value]||PRIORITY_CFG['Medium'];
+  const close = useCallback(()=>setOpen(false),[]);
+  useOutsideClick(ref, close);
+  return (
+    <div ref={ref} style={{position:'relative',display:'inline-flex'}}>
+      <button onClick={()=>onChange&&setOpen(!open)} style={{display:'inline-flex',alignItems:'center',gap:5,cursor:onChange?'pointer':'default',fontSize:size==='sm'?11:13,fontWeight:600,color:cfg.color,border:'none',background:'transparent',padding:'4px 6px',borderRadius:6}}>
+        <span style={{width:8,height:8,borderRadius:2,background:cfg.color,flexShrink:0}}/>
+        {value}
+        {onChange && <span style={{fontSize:9,opacity:0.6}}>▾</span>}
+      </button>
+      {open && (
+        <Portal>
+          <PriorityDropdown anchor={ref} value={value} onChange={v=>{onChange(v);setOpen(false);}} onClose={close}/>
+        </Portal>
+      )}
+    </div>
+  );
+}
+
+function PriorityDropdown({ anchor, value, onChange, onClose }) {
+  const ref = useRef();
+  const [pos,setPos] = useState({top:0,left:0});
+  useOutsideClick(ref, onClose);
+  useEffect(()=>{
+    if(anchor.current){const r=anchor.current.getBoundingClientRect();setPos({top:r.bottom+4,left:r.left});}
+  },[]);
+  return (
+    <div ref={ref} style={{position:'fixed',top:pos.top,left:pos.left,zIndex:99999,background:'#fff',border:'1px solid #e5e7eb',borderRadius:10,boxShadow:'0 10px 30px rgba(0,0,0,0.13)',padding:'4px 0',minWidth:150}}>
+      <div style={{padding:'6px 12px 3px',fontSize:10,color:'#9ca3af',fontWeight:700,letterSpacing:'0.06em',textTransform:'uppercase'}}>Priority</div>
+      {PRIORITIES.map(p=>{
+        const c=PRIORITY_CFG[p];
+        return <DropItem key={p} active={p===value} onClick={()=>onChange(p)} icon={<span style={{width:8,height:8,borderRadius:2,background:c.color,display:'inline-block'}}/>} label={p}/>;
+      })}
+    </div>
+  );
+}
+
+function DropItem({ active, onClick, icon, label }) {
+  const [hov,setHov] = useState(false);
+  return (
+    <div onClick={onClick} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} style={{padding:'7px 12px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,background:hov||active?'#f3f4f6':'transparent'}}>
+      {icon}
+      <span style={{fontSize:13,color:'#374151'}}>{label}</span>
+      {active && <span style={{marginLeft:'auto',color:'#10b981',fontSize:13}}>✓</span>}
+    </div>
+  );
+}
+
+function OwnerChip({ value, members, onChange }) {
+  const [open,setOpen] = useState(false);
+  const ref = useRef();
+  const close = useCallback(()=>setOpen(false),[]);
+  useOutsideClick(ref, close);
+  return (
+    <div ref={ref} style={{position:'relative',display:'inline-flex'}}>
+      <button onClick={()=>onChange&&setOpen(!open)} style={{display:'flex',alignItems:'center',gap:6,border:'none',background:'transparent',cursor:onChange?'pointer':'default',padding:'2px 4px',borderRadius:6}}>
+        {value ? <><Avatar name={value} size={22}/><span style={{fontSize:12,color:'#374151',maxWidth:80,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{value}</span></> : <span style={{fontSize:12,color:'#9ca3af'}}>— Assign</span>}
+        {onChange && <span style={{fontSize:9,opacity:0.5,color:'#9ca3af'}}>▾</span>}
+      </button>
+      {open && (
+        <Portal>
+          <OwnerDropdown anchor={ref} value={value} members={members} onChange={v=>{onChange(v);setOpen(false);}} onClose={close}/>
+        </Portal>
+      )}
+    </div>
+  );
+}
+
+function OwnerDropdown({ anchor, value, members, onChange, onClose }) {
+  const ref = useRef();
+  const [pos,setPos] = useState({top:0,left:0});
+  const [search,setSearch] = useState('');
+  useOutsideClick(ref, onClose);
+  useEffect(()=>{
+    if(anchor.current){const r=anchor.current.getBoundingClientRect();setPos({top:r.bottom+4,left:r.left});}
+  },[]);
+  const filtered = members.filter(m=>m.name.toLowerCase().includes(search.toLowerCase()));
+  return (
+    <div ref={ref} style={{position:'fixed',top:pos.top,left:pos.left,zIndex:99999,background:'#fff',border:'1px solid #e5e7eb',borderRadius:10,boxShadow:'0 10px 30px rgba(0,0,0,0.13)',padding:'4px 0',minWidth:200}}>
+      <div style={{padding:'6px 10px'}}>
+        <input autoFocus value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search members…" style={{width:'100%',border:'1px solid #e5e7eb',borderRadius:6,padding:'5px 8px',fontSize:12,outline:'none'}}/>
+      </div>
+      {value && <DropItem active={false} onClick={()=>onChange(null)} icon={<span style={{width:8,height:8,borderRadius:'50%',background:'#9ca3af',display:'inline-block'}}/>} label="Unassign"/>}
+      {filtered.map(m=>(
+        <div key={m.id} onClick={()=>onChange(m.name)} style={{padding:'6px 12px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,background:m.name===value?'#f3f4f6':'transparent'}} onMouseEnter={e=>e.currentTarget.style.background='#f9fafb'} onMouseLeave={e=>e.currentTarget.style.background=m.name===value?'#f3f4f6':'transparent'}>
+          <Avatar name={m.name} color={m.color} size={22}/>
+          <div style={{display:'flex',flexDirection:'column'}}>
+            <span style={{fontSize:13,color:'#374151',fontWeight:500}}>{m.name}</span>
+            {m.role && <span style={{fontSize:11,color:'#9ca3af'}}>{m.role}</span>}
+          </div>
+          {m.name===value && <span style={{marginLeft:'auto',color:'#10b981',fontSize:13}}>✓</span>}
+        </div>
+      ))}
+      {filtered.length===0 && <div style={{padding:'8px 12px',fontSize:12,color:'#9ca3af'}}>No members found</div>}
+    </div>
+  );
+}
+
+function Btn({ onClick, children, variant='default', small, disabled, style: s }) {
+  const [hov,setHov] = useState(false);
+  const base = {display:'inline-flex',alignItems:'center',gap:5,border:'none',borderRadius:6,fontWeight:500,cursor:disabled?'not-allowed':'pointer',transition:'all 0.15s',opacity:disabled?0.5:1,...s};
+  const variants = {
+    default: {background:hov?'#f9fafb':'#fff',color:'#374151',border:'1px solid #e5e7eb',padding:small?'5px 10px':'7px 14px',fontSize:small?12:13},
+    primary: {background:hov?'#4f46e5':'#6366f1',color:'#fff',padding:small?'5px 12px':'8px 16px',fontSize:small?12:13},
+    danger:  {background:hov?'#dc2626':'#ef4444',color:'#fff',padding:small?'5px 10px':'7px 14px',fontSize:small?12:13},
+    ghost:   {background:hov?'#f3f4f6':'transparent',color:'#6b7280',padding:small?'4px 8px':'6px 12px',fontSize:small?12:13},
+  };
+  return (
+    <button onClick={onClick} disabled={disabled} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} style={{...base,...variants[variant]}}>
+      {children}
+    </button>
+  );
+}
+
+/* ================================================================
+   SETUP SCREEN
+================================================================ */
+function SetupScreen({ onDone }) {
+  const [url,setUrl] = useState('');
+  const [key,setKey] = useState('');
+  const [err,setErr] = useState('');
+  const [loading,setLoading] = useState(false);
+
+  async function handleConnect() {
+    if (!url||!key) { setErr('Both fields are required.'); return; }
+    if (!url.startsWith('https://')) { setErr('URL must start with https://'); return; }
+    setLoading(true); setErr('');
+    try {
+      const client = window.supabase.createClient(url.trim(), key.trim());
+      const { error } = await client.from('projects').select('count').limit(1);
+      if (error && error.code !== 'PGRST116') throw error;
+      const cfg = saveConfig(url.trim(), key.trim());
+      initDB(cfg.url, cfg.key);
+      onDone();
+    } catch(e) {
+      setErr('Could not connect. Check your URL and API key, and make sure the schema has been applied.');
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div style={{minHeight:'100vh',background:'linear-gradient(135deg,#1e1b4b 0%,#312e81 50%,#1e1b4b 100%)',display:'flex',alignItems:'center',justifyContent:'center',padding:24}}>
+      <div style={{background:'#fff',borderRadius:16,padding:40,maxWidth:520,width:'100%',boxShadow:'0 25px 60px rgba(0,0,0,0.3)'}}>
+        <div style={{textAlign:'center',marginBottom:32}}>
+          <div style={{width:56,height:56,background:'linear-gradient(135deg,#6366f1,#8b5cf6)',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:28}}>⚡</div>
+          <h1 style={{fontSize:24,fontWeight:700,color:'#1e1b4b',marginBottom:6}}>DataFlow</h1>
+          <p style={{color:'#6b7280',fontSize:14}}>Engineering Task Tracker — connect your Supabase database to get started</p>
+        </div>
+
+        <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:16,marginBottom:24,fontSize:13,color:'#475569'}}>
+          <strong style={{color:'#334155',display:'block',marginBottom:6}}>📋 Before you begin:</strong>
+          <ol style={{paddingLeft:20,lineHeight:1.8}}>
+            <li>Create a free account at <strong>supabase.com</strong></li>
+            <li>Create a new project and run the <code style={{background:'#e2e8f0',padding:'1px 5px',borderRadius:3}}>schema.sql</code> in the SQL Editor</li>
+            <li>Go to Project Settings → API to get your URL and anon key</li>
+            <li>Enter them below and click Connect</li>
+          </ol>
+        </div>
+
+        <div style={{marginBottom:16}}>
+          <label style={{display:'block',fontSize:13,fontWeight:600,color:'#374151',marginBottom:5}}>Supabase Project URL</label>
+          <input value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://xxxxxxxxxxxx.supabase.co" style={{width:'100%',border:'1px solid #d1d5db',borderRadius:8,padding:'10px 12px',fontSize:14,outline:'none',transition:'border 0.15s'}} onFocus={e=>e.target.style.borderColor='#6366f1'} onBlur={e=>e.target.style.borderColor='#d1d5db'}/>
+        </div>
+        <div style={{marginBottom:24}}>
+          <label style={{display:'block',fontSize:13,fontWeight:600,color:'#374151',marginBottom:5}}>Supabase Anon Key</label>
+          <input value={key} onChange={e=>setKey(e.target.value)} type="password" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9…" style={{width:'100%',border:'1px solid #d1d5db',borderRadius:8,padding:'10px 12px',fontSize:14,outline:'none'}} onFocus={e=>e.target.style.borderColor='#6366f1'} onBlur={e=>e.target.style.borderColor='#d1d5db'}/>
+          <p style={{fontSize:11,color:'#9ca3af',marginTop:4}}>The anon key is safe to use in the browser (it's public by design).</p>
+        </div>
+
+        {err && <div style={{background:'#fee2e2',color:'#991b1b',borderRadius:8,padding:'10px 14px',fontSize:13,marginBottom:16}}>{err}</div>}
+
+        <button onClick={handleConnect} disabled={loading} style={{width:'100%',background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'#fff',border:'none',borderRadius:8,padding:'12px',fontSize:15,fontWeight:600,cursor:loading?'wait':'pointer',opacity:loading?0.7:1}}>
+          {loading ? '⏳ Connecting…' : '⚡ Connect to Supabase'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   TASK MODAL
+================================================================ */
+function TaskModal({ task, members, onClose, onUpdate, onDelete, db }) {
+  const [t, setT] = useState({...task});
+  const [activities, setActivities] = useState([]);
+  const [comment, setComment] = useState('');
+  const [loadingAct, setLoadingAct] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameVal, setNameVal] = useState(task.name);
+
+  useEffect(()=>{
+    loadActivities();
+  },[task.id]);
+
+  async function loadActivities() {
+    setLoadingAct(true);
+    try { const acts = await api.getActivities(task.id); setActivities(acts); }
+    catch(e) {}
+    setLoadingAct(false);
+  }
+
+  async function fieldChange(field, newVal) {
+    const old = t[field];
+    if (old===newVal) return;
+    const updated = {...t,[field]:newVal};
+    setT(updated);
+    try {
+      const saved = await api.updateTask(task.id, {[field]:newVal});
+      await api.addActivity(task.id,'field_change',`Changed ${field.replace('_',' ')} from "${old||'–'}" to "${newVal||'–'}"`, 'You', old, newVal);
+      const acts = await api.getActivities(task.id); setActivities(acts);
+      onUpdate(saved);
+    } catch(e) { setT({...t}); }
+  }
+
+  async function saveName() {
+    setEditingName(false);
+    if (nameVal!==t.name) await fieldChange('name', nameVal);
+  }
+
+  async function addComment() {
+    if (!comment.trim()) return;
+    setSaving(true);
+    try {
+      await api.addActivity(task.id,'comment',comment.trim());
+      setComment('');
+      const acts = await api.getActivities(task.id); setActivities(acts);
+    } catch(e){}
+    setSaving(false);
+  }
+
+  const actIcon = type => type==='comment'?'💬':type==='created'?'✨':type==='status_change'?'🔄':'📝';
+
+  return (
+    <Portal>
+      <div onClick={e=>e.target===e.currentTarget&&onClose()} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',zIndex:9998,display:'flex',alignItems:'flex-start',justifyContent:'center',paddingTop:40,paddingBottom:40,overflowY:'auto'}}>
+        <div style={{background:'#fff',borderRadius:14,width:'100%',maxWidth:720,margin:'0 20px',boxShadow:'0 25px 60px rgba(0,0,0,0.25)',position:'relative'}}>
+          {/* Header */}
+          <div style={{padding:'20px 24px 16px',borderBottom:'1px solid #f3f4f6',display:'flex',alignItems:'flex-start',gap:12}}>
+            <div style={{flex:1}}>
+              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+                <StatusChip value={t.status} onChange={v=>fieldChange('status',v)} size="sm"/>
+                <PriorityChip value={t.priority} onChange={v=>fieldChange('priority',v)} size="sm"/>
+              </div>
+              {editingName
+                ? <input autoFocus value={nameVal} onChange={e=>setNameVal(e.target.value)} onBlur={saveName} onKeyDown={e=>{if(e.key==='Enter')saveName();if(e.key==='Escape'){setEditingName(false);setNameVal(t.name);}}} style={{fontSize:20,fontWeight:700,color:'#111',border:'none',outline:'2px solid #6366f1',borderRadius:6,padding:'2px 6px',width:'100%'}}/>
+                : <h2 onClick={()=>setEditingName(true)} style={{fontSize:20,fontWeight:700,color:'#111',cursor:'text',padding:'2px 0',borderRadius:4}} title="Click to edit">{t.name}</h2>
+              }
+            </div>
+            <button onClick={onClose} style={{background:'#f3f4f6',border:'none',borderRadius:8,width:32,height:32,fontSize:18,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#6b7280',flexShrink:0}}>×</button>
+          </div>
+
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:0,padding:'16px 24px',borderBottom:'1px solid #f3f4f6'}}>
+            <Field label="Owner">
+              <OwnerChip value={t.owner} members={members} onChange={v=>fieldChange('owner',v)}/>
+            </Field>
+            <Field label="Due Date">
+              <input type="date" value={t.due_date||''} onChange={e=>fieldChange('due_date',e.target.value||null)} style={{border:'1px solid #e5e7eb',borderRadius:6,padding:'4px 8px',fontSize:12,color:'#374151',outline:'none'}}/>
+            </Field>
+            <Field label="Start Date">
+              <input type="date" value={t.start_date||''} onChange={e=>fieldChange('start_date',e.target.value||null)} style={{border:'1px solid #e5e7eb',borderRadius:6,padding:'4px 8px',fontSize:12,color:'#374151',outline:'none'}}/>
+            </Field>
+            <Field label="Created">
+              <span style={{fontSize:12,color:'#6b7280'}}>{fmtDateFull(t.created_at?.split('T')[0])}</span>
+            </Field>
+          </div>
+
+          {/* Description */}
+          <div style={{padding:'16px 24px',borderBottom:'1px solid #f3f4f6'}}>
+            <label style={{fontSize:12,fontWeight:600,color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6}}>Description</label>
+            <textarea value={t.description||''} onChange={e=>setT({...t,description:e.target.value})} onBlur={e=>fieldChange('description',e.target.value)} placeholder="Add a description…" rows={3} style={{width:'100%',border:'1px solid #e5e7eb',borderRadius:8,padding:'10px 12px',fontSize:13,color:'#374151',resize:'vertical',outline:'none',fontFamily:'inherit'}}/>
+          </div>
+
+          {/* Activity */}
+          <div style={{padding:'16px 24px'}}>
+            <div style={{fontSize:12,fontWeight:600,color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:12}}>Activity</div>
+
+            <div style={{display:'flex',gap:10,marginBottom:16}}>
+              <Avatar name="You" size={30}/>
+              <div style={{flex:1,display:'flex',gap:8}}>
+                <input value={comment} onChange={e=>setComment(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();addComment();}}} placeholder="Write a comment or update…" style={{flex:1,border:'1px solid #e5e7eb',borderRadius:8,padding:'8px 12px',fontSize:13,outline:'none',fontFamily:'inherit'}}/>
+                <Btn onClick={addComment} variant="primary" small disabled={!comment.trim()||saving}>{saving?'…':'Add'}</Btn>
+              </div>
+            </div>
+
+            {loadingAct
+              ? <div style={{color:'#9ca3af',fontSize:13,textAlign:'center',padding:16}}>Loading activity…</div>
+              : activities.length===0
+                ? <div style={{color:'#9ca3af',fontSize:13,textAlign:'center',padding:16}}>No activity yet</div>
+                : <div style={{maxHeight:260,overflowY:'auto',display:'flex',flexDirection:'column',gap:10}}>
+                    {activities.map(a=>(
+                      <div key={a.id} style={{display:'flex',gap:10,alignItems:'flex-start'}}>
+                        <div style={{width:28,height:28,borderRadius:'50%',background:colorForName(a.author),color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,flexShrink:0,marginTop:2}}>
+                          {initials(a.author)}
+                        </div>
+                        <div style={{flex:1}}>
+                          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
+                            <span style={{fontSize:12,fontWeight:600,color:'#374151'}}>{a.author}</span>
+                            <span style={{fontSize:11,color:'#9ca3af'}}>{timeAgo(a.created_at)}</span>
+                          </div>
+                          <div style={{background:a.type==='comment'?'#f9fafb':'transparent',border:a.type==='comment'?'1px solid #f3f4f6':'none',borderRadius:8,padding:a.type==='comment'?'8px 10px':'0',fontSize:13,color:'#4b5563',lineHeight:1.5}}>
+                            {a.type!=='comment'&&<span style={{marginRight:6}}>{actIcon(a.type)}</span>}
+                            {a.content}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+            }
+          </div>
+
+          {/* Delete */}
+          <div style={{padding:'12px 24px',borderTop:'1px solid #f3f4f6',display:'flex',justifyContent:'flex-end'}}>
+            <Btn variant="danger" small onClick={()=>{if(confirm(`Delete "${t.name}"?`)){onDelete(task.id);onClose();}}}>🗑 Delete Task</Btn>
+          </div>
+        </div>
+      </div>
+    </Portal>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div style={{padding:'6px 0',display:'flex',alignItems:'center',gap:8}}>
+      <span style={{fontSize:11,fontWeight:600,color:'#9ca3af',textTransform:'uppercase',letterSpacing:'0.05em',minWidth:72}}>{label}</span>
+      {children}
+    </div>
+  );
+}
+
+/* ================================================================
+   TABLE VIEW
+================================================================ */
+function TableView({ groups, tasks, members, projectId, onAddGroup, onTaskClick, onRefresh }) {
+  const [collapsed, setCollapsed] = useState({});
+  const [addingTask, setAddingTask] = useState(null);
+  const [newTaskName, setNewTaskName] = useState('');
+  const [editingGroup, setEditingGroup] = useState(null);
+  const [editGroupName, setEditGroupName] = useState('');
+
+  async function handleAddTask(groupId) {
+    if (!newTaskName.trim()) { setAddingTask(null); return; }
+    const grpTasks = tasks.filter(t=>t.group_id===groupId);
+    try {
+      await api.createTask(groupId, projectId, newTaskName.trim(), grpTasks.length);
+      setNewTaskName(''); setAddingTask(null);
+      onRefresh();
+    } catch(e) { alert('Failed to create task: '+e.message); }
+  }
+
+  async function handleUpdateTask(taskId, updates) {
+    try { await api.updateTask(taskId, updates); onRefresh(); }
+    catch(e){}
+  }
+
+  async function handleDeleteGroup(groupId) {
+    if (!confirm('Delete this group and all its tasks?')) return;
+    try { await api.deleteGroup(groupId); onRefresh(); }
+    catch(e){ alert('Error: '+e.message); }
+  }
+
+  async function saveGroupName(groupId) {
+    setEditingGroup(null);
+    if (editGroupName.trim()) {
+      try { await api.updateGroup(groupId, {name:editGroupName.trim()}); onRefresh(); }
+      catch(e){}
+    }
+  }
+
+  const COL = { check:40, name:1, status:130, priority:110, owner:150, due:110, actions:50 };
+
+  return (
+    <div style={{flex:1,overflowY:'auto',padding:'8px 20px 40px'}}>
+      {/* Column headers */}
+      <div style={{display:'grid',gridTemplateColumns:`${COL.check}px 1fr ${COL.status}px ${COL.priority}px ${COL.owner}px ${COL.due}px ${COL.actions}px`,gap:0,padding:'0 0 6px',position:'sticky',top:0,background:'#f5f6f8',zIndex:10}}>
+        <div/>
+        <ColHdr>Task Name</ColHdr>
+        <ColHdr>Status</ColHdr>
+        <ColHdr>Priority</ColHdr>
+        <ColHdr>Owner</ColHdr>
+        <ColHdr>Due Date</ColHdr>
+        <div/>
+      </div>
+
+      {groups.map((grp, gi) => {
+        const grpTasks = tasks.filter(t=>t.group_id===grp.id);
+        const isCollapsed = collapsed[grp.id];
+        return (
+          <div key={grp.id} style={{marginBottom:16}}>
+            {/* Group header */}
+            <div style={{display:'grid',gridTemplateColumns:`${COL.check}px 1fr`,borderRadius:'8px 8px 0 0',background:'#fff',border:`1px solid #e9ecef`,borderLeft:`4px solid ${grp.color||GRP_COLORS[gi%GRP_COLORS.length]}`}}>
+              <button onClick={()=>setCollapsed(c=>({...c,[grp.id]:!isCollapsed}))} style={{background:'transparent',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,color:'#9ca3af',height:36}}>
+                {isCollapsed?'▶':'▼'}
+              </button>
+              <div style={{display:'flex',alignItems:'center',gap:8,padding:'0 8px'}}>
+                {editingGroup===grp.id
+                  ? <input autoFocus value={editGroupName} onChange={e=>setEditGroupName(e.target.value)} onBlur={()=>saveGroupName(grp.id)} onKeyDown={e=>{if(e.key==='Enter')saveGroupName(grp.id);if(e.key==='Escape')setEditingGroup(null);}} style={{fontSize:13,fontWeight:600,border:'none',outline:'2px solid #6366f1',borderRadius:4,padding:'2px 6px',background:'transparent',width:'100%'}}/>
+                  : <span onClick={()=>{setEditingGroup(grp.id);setEditGroupName(grp.name);}} style={{fontSize:13,fontWeight:700,color:'#374151',cursor:'text'}} title="Click to rename">{grp.name}</span>
+                }
+                <span style={{background:'#f3f4f6',color:'#9ca3af',fontSize:11,fontWeight:600,borderRadius:10,padding:'1px 7px'}}>{grpTasks.length}</span>
+                <button onClick={()=>handleDeleteGroup(grp.id)} style={{marginLeft:'auto',background:'transparent',border:'none',cursor:'pointer',color:'#d1d5db',fontSize:14,padding:'2px 4px',borderRadius:4}} title="Delete group">×</button>
+              </div>
+            </div>
+
+            {/* Task rows */}
+            {!isCollapsed && (
+              <div style={{border:'1px solid #e9ecef',borderTop:'none',borderRadius:'0 0 8px 8px',overflow:'hidden',background:'#fff'}}>
+                {grpTasks.map((task,ti) => (
+                  <TaskRow key={task.id} task={task} members={members} onClick={()=>onTaskClick(task)} onUpdate={u=>handleUpdateTask(task.id,u)} isLast={ti===grpTasks.length-1}/>
+                ))}
+
+                {/* Add task row */}
+                {addingTask===grp.id
+                  ? <div style={{display:'grid',gridTemplateColumns:`${COL.check}px 1fr`,borderTop:'1px solid #f3f4f6',padding:'6px 0'}}>
+                      <div/>
+                      <input autoFocus value={newTaskName} onChange={e=>setNewTaskName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handleAddTask(grp.id);if(e.key==='Escape'){setAddingTask(null);setNewTaskName('');}}} onBlur={()=>handleAddTask(grp.id)} placeholder="Task name…" style={{fontSize:13,border:'none',outline:'none',color:'#374151',paddingRight:12}}/>
+                    </div>
+                  : <div onClick={()=>setAddingTask(grp.id)} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 8px 8px 50px',cursor:'pointer',color:'#9ca3af',fontSize:12,fontWeight:500,borderTop:'1px solid #f3f4f6'}} onMouseEnter={e=>{e.currentTarget.style.background='#f9fafb';e.currentTarget.style.color='#6b7280';}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='#9ca3af';}}>
+                      <span style={{fontSize:16,fontWeight:400}}>+</span> Add task
+                    </div>
+                }
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Add group */}
+      <button onClick={onAddGroup} style={{display:'flex',alignItems:'center',gap:6,fontSize:13,fontWeight:600,color:'#6366f1',background:'transparent',border:'1px dashed #c7d2fe',borderRadius:8,padding:'8px 16px',cursor:'pointer',marginTop:8,transition:'all 0.15s'}} onMouseEnter={e=>{e.currentTarget.style.background='#eef2ff';}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';}}>
+        <span style={{fontSize:18,lineHeight:1}}>+</span> Add Group
+      </button>
+    </div>
+  );
+}
+
+function ColHdr({ children }) {
+  return <div style={{fontSize:11,fontWeight:600,color:'#9ca3af',textTransform:'uppercase',letterSpacing:'0.05em',padding:'4px 8px'}}>{children}</div>;
+}
+
+function TaskRow({ task, members, onClick, onUpdate, isLast }) {
+  const [hov,setHov] = useState(false);
+  const od = isOverdue(task.due_date) && task.status!=='Done';
+  const COL = { check:40, name:1, status:130, priority:110, owner:150, due:110, actions:50 };
+
+  return (
+    <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} style={{display:'grid',gridTemplateColumns:`${COL.check}px 1fr ${COL.status}px ${COL.priority}px ${COL.owner}px ${COL.due}px ${COL.actions}px`,borderTop:'1px solid #f3f4f6',background:hov?'#f9fafb':'#fff',minHeight:40,alignItems:'center'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center'}}>
+        <input type="checkbox" checked={task.status==='Done'} onChange={e=>onUpdate({status:e.target.checked?'Done':'Not Started'})} style={{cursor:'pointer',width:14,height:14,accentColor:'#10b981'}}/>
+      </div>
+      <div onClick={onClick} style={{padding:'0 8px',fontSize:13,color:'#111',fontWeight:500,cursor:'pointer',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',textDecoration:task.status==='Done'?'line-through':'none',opacity:task.status==='Done'?0.5:1}}>
+        {task.name}
+      </div>
+      <div style={{padding:'0 4px'}}>
+        <StatusChip value={task.status} onChange={v=>onUpdate({status:v})} size="sm"/>
+      </div>
+      <div style={{padding:'0 4px'}}>
+        <PriorityChip value={task.priority} onChange={v=>onUpdate({priority:v})} size="sm"/>
+      </div>
+      <div style={{padding:'0 4px'}}>
+        <OwnerChip value={task.owner} members={members} onChange={v=>onUpdate({owner:v})}/>
+      </div>
+      <div style={{padding:'0 4px',fontSize:12,color:od?'#ef4444':'#6b7280',fontWeight:od?600:400}}>
+        {task.due_date ? (od?'⚠ ':'')+ fmtDate(task.due_date) : <span style={{color:'#d1d5db'}}>—</span>}
+      </div>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center',opacity:hov?1:0}}>
+        <button onClick={onClick} title="Open task" style={{background:'transparent',border:'none',cursor:'pointer',color:'#9ca3af',fontSize:14,padding:'2px 4px',borderRadius:4}}>↗</button>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   KANBAN VIEW
+================================================================ */
+function KanbanView({ tasks, members, projectId, onTaskClick, onRefresh, groups }) {
+  async function handleAddTask(status) {
+    const name = prompt('Task name:');
+    if (!name?.trim()) return;
+    if (groups.length===0) { alert('Create a group first in Table view.'); return; }
+    try {
+      await api.createTask(groups[0].id, projectId, name.trim(), tasks.length);
+      onRefresh();
+    } catch(e){ alert('Error: '+e.message); }
+  }
+
+  return (
+    <div style={{flex:1,overflowX:'auto',overflowY:'auto',padding:'16px 20px'}}>
+      <div style={{display:'flex',gap:12,minWidth:'max-content',alignItems:'flex-start'}}>
+        {STATUSES.map(status=>{
+          const stTasks = tasks.filter(t=>t.status===status);
+          const cfg = STATUS_CFG[status];
+          return (
+            <div key={status} style={{width:260,flexShrink:0}}>
+              <div style={{display:'flex',alignItems:'center',gap:8,padding:'10px 12px',borderRadius:'10px 10px 0 0',background:cfg.bg,border:`1px solid ${cfg.border}`,borderBottom:'none'}}>
+                <span style={{width:8,height:8,borderRadius:'50%',background:cfg.dot,flexShrink:0}}/>
+                <span style={{fontSize:12,fontWeight:700,color:cfg.text,flex:1}}>{status}</span>
+                <span style={{background:'rgba(0,0,0,0.08)',color:cfg.text,fontSize:11,fontWeight:700,borderRadius:10,padding:'1px 7px'}}>{stTasks.length}</span>
+              </div>
+              <div style={{border:`1px solid ${cfg.border}`,borderTop:'none',borderRadius:'0 0 10px 10px',background:'#fff',minHeight:80,display:'flex',flexDirection:'column',gap:1,padding:'4px'}}>
+                {stTasks.map(task=>(
+                  <KanbanCard key={task.id} task={task} members={members} onClick={()=>onTaskClick(task)}/>
+                ))}
+                <button onClick={()=>handleAddTask(status)} style={{display:'flex',alignItems:'center',gap:5,padding:'7px 10px',fontSize:12,color:'#9ca3af',background:'transparent',border:'none',cursor:'pointer',borderRadius:6,marginTop:4}} onMouseEnter={e=>{e.currentTarget.style.background='#f9fafb';e.currentTarget.style.color='#6b7280';}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='#9ca3af';}}>
+                  <span style={{fontSize:16}}>+</span> Add task
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function KanbanCard({ task, members, onClick }) {
+  const [hov,setHov] = useState(false);
+  const od = isOverdue(task.due_date) && task.status!=='Done';
+  const pc = PRIORITY_CFG[task.priority]||PRIORITY_CFG['Medium'];
+  return (
+    <div onClick={onClick} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} style={{background:hov?'#f9fafb':'#fff',border:'1px solid #e9ecef',borderRadius:8,padding:'10px 12px',cursor:'pointer',transition:'all 0.15s',boxShadow:hov?'0 2px 8px rgba(0,0,0,0.08)':'none',borderLeft:`3px solid ${pc.color}`}}>
+      <div style={{fontSize:13,fontWeight:500,color:'#111',marginBottom:8,lineHeight:1.4}}>{task.name}</div>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div style={{display:'flex',alignItems:'center',gap:6}}>
+          {task.owner && <Avatar name={task.owner} size={20}/>}
+          {task.due_date && <span style={{fontSize:11,color:od?'#ef4444':'#9ca3af',fontWeight:od?600:400}}>{od?'⚠ ':''}{fmtDate(task.due_date)}</span>}
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:4,background:pc.bg,color:pc.color,borderRadius:4,padding:'1px 6px',fontSize:10,fontWeight:700}}>
+          <span style={{width:5,height:5,borderRadius:1,background:pc.color}}/>
+          {task.priority}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   TIMELINE VIEW
+================================================================ */
+function TimelineView({ tasks, groups }) {
+  const CELL_W = 36;
+  const LABEL_W = 220;
+  const ROW_H = 40;
+
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  // Build 10-week range centred on today
+  const startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - 14);
+  startDate.setDate(startDate.getDate() - startDate.getDay()); // Start of week
+
+  const weeks = [];
+  for (let i=0; i<14; i++) {
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + i*7);
+    weeks.push(d);
+  }
+
+  const days = weeks.length * 7;
+  const totalW = LABEL_W + days * CELL_W;
+
+  function dayOffset(dateStr) {
+    if (!dateStr) return null;
+    const d = new Date(dateStr + 'T12:00:00');
+    const diff = Math.floor((d - startDate) / 86400000);
+    return diff;
+  }
+
+  const tasksWithDates = tasks.filter(t=>t.start_date||t.due_date);
+  const todayOffset = Math.floor((today - startDate) / 86400000);
+
+  return (
+    <div style={{flex:1,overflowX:'auto',overflowY:'auto',padding:'16px 20px'}}>
+      <div style={{minWidth:totalW, fontFamily:'inherit'}}>
+        {/* Week headers */}
+        <div style={{display:'flex',borderBottom:'2px solid #e9ecef',background:'#f5f6f8',position:'sticky',top:0,zIndex:5}}>
+          <div style={{width:LABEL_W,flexShrink:0,padding:'8px 12px',fontSize:11,fontWeight:700,color:'#9ca3af',textTransform:'uppercase',letterSpacing:'0.05em',borderRight:'1px solid #e9ecef'}}>Task</div>
+          <div style={{display:'flex',flex:1}}>
+            {weeks.map((w,wi)=>{
+              const isCurrentWeek = w <= today && today < new Date(w.getTime()+7*86400000);
+              return (
+                <div key={wi} style={{width:CELL_W*7,flexShrink:0,borderRight:'1px solid #e9ecef',padding:'8px 4px',textAlign:'center',background:isCurrentWeek?'#eef2ff':'transparent'}}>
+                  <div style={{fontSize:10,fontWeight:700,color:isCurrentWeek?'#6366f1':'#9ca3af',textTransform:'uppercase',letterSpacing:'0.05em'}}>{w.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Rows */}
+        {tasksWithDates.length===0
+          ? <div style={{textAlign:'center',padding:40,color:'#9ca3af',fontSize:14}}>
+              No tasks with dates yet. Add start dates and due dates to tasks to see them here.
+            </div>
+          : tasksWithDates.map(task=>{
+              const startOff = task.start_date ? dayOffset(task.start_date) : dayOffset(task.due_date);
+              const endOff = task.due_date ? dayOffset(task.due_date) : startOff;
+              const barLeft = Math.max(0, startOff) * CELL_W;
+              const barWidth = Math.max(1, (endOff - Math.max(0,startOff) + 1)) * CELL_W;
+              const visible = endOff >= 0 && startOff <= days;
+              const pc = PRIORITY_CFG[task.priority]||PRIORITY_CFG['Medium'];
+              const sc = STATUS_CFG[task.status]||STATUS_CFG['Not Started'];
+              const od = isOverdue(task.due_date) && task.status!=='Done';
+              return (
+                <div key={task.id} style={{display:'flex',borderBottom:'1px solid #f3f4f6',height:ROW_H,alignItems:'center',background:'#fff',position:'relative'}} onMouseEnter={e=>e.currentTarget.style.background='#f9fafb'} onMouseLeave={e=>e.currentTarget.style.background='#fff'}>
+                  <div style={{width:LABEL_W,flexShrink:0,padding:'0 12px',borderRight:'1px solid #e9ecef',display:'flex',alignItems:'center',gap:8,overflow:'hidden'}}>
+                    <span style={{width:6,height:6,borderRadius:'50%',background:sc.dot,flexShrink:0}}/>
+                    <span style={{fontSize:12,color:'#374151',fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{task.name}</span>
+                  </div>
+                  <div style={{flex:1,position:'relative',height:'100%',overflow:'hidden'}}>
+                    {/* Today line */}
+                    {todayOffset>=0 && todayOffset<=days && (
+                      <div style={{position:'absolute',left:todayOffset*CELL_W+CELL_W/2,top:0,bottom:0,width:2,background:'#6366f1',opacity:0.6,zIndex:3}}/>
+                    )}
+                    {/* Weekend shading */}
+                    {Array.from({length:days}).map((_,di)=>{
+                      const d = new Date(startDate); d.setDate(d.getDate()+di);
+                      const dow = d.getDay();
+                      return (dow===0||dow===6) ? <div key={di} style={{position:'absolute',left:di*CELL_W,top:0,bottom:0,width:CELL_W,background:'rgba(0,0,0,0.025)'}}/> : null;
+                    })}
+                    {/* Task bar */}
+                    {visible && (
+                      <div title={`${task.name}: ${task.start_date||task.due_date} → ${task.due_date||task.start_date}`} style={{position:'absolute',left:barLeft,width:Math.min(barWidth,days*CELL_W-barLeft),top:'50%',transform:'translateY(-50%)',height:22,borderRadius:11,background:od?'#fee2e2':sc.bg,border:`1px solid ${od?'#fca5a5':sc.border}`,display:'flex',alignItems:'center',paddingLeft:8,overflow:'hidden',cursor:'default',zIndex:2}}>
+                        <span style={{fontSize:11,fontWeight:600,color:od?'#991b1b':sc.text,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{task.name}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+        }
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   SIDEBAR
+================================================================ */
+function Sidebar({ projects, selectedId, onSelect, onNewProject }) {
+  const [hov,setHov] = useState(null);
+  const [showShare, setShowShare] = useState(false);
+  const link = getShareLink();
+
+  return (
+    <div style={{width:240,flexShrink:0,background:'#1e1e2e',display:'flex',flexDirection:'column',height:'100vh',overflow:'hidden'}}>
+      {/* Logo */}
+      <div style={{padding:'20px 16px 12px',borderBottom:'1px solid rgba(255,255,255,0.06)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <div style={{width:34,height:34,background:'linear-gradient(135deg,#6366f1,#8b5cf6)',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>⚡</div>
+          <div>
+            <div style={{fontSize:15,fontWeight:700,color:'#f1f5f9'}}>DataFlow</div>
+            <div style={{fontSize:11,color:'#64748b'}}>Engineering Tracker</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Projects */}
+      <div style={{flex:1,overflowY:'auto',padding:'12px 8px'}}>
+        <div style={{fontSize:10,fontWeight:700,color:'#475569',letterSpacing:'0.08em',textTransform:'uppercase',padding:'4px 8px 8px'}}>Projects</div>
+        {projects.map(p=>{
+          const active = p.id===selectedId;
+          return (
+            <div key={p.id} onClick={()=>onSelect(p.id)} onMouseEnter={()=>setHov(p.id)} onMouseLeave={()=>setHov(null)} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:8,cursor:'pointer',marginBottom:2,background:active?'rgba(99,102,241,0.2)':hov===p.id?'rgba(255,255,255,0.05)':'transparent',transition:'all 0.1s'}}>
+              <span style={{width:8,height:8,borderRadius:'50%',background:p.color||'#6366f1',flexShrink:0}}/>
+              <span style={{fontSize:13,fontWeight:active?600:400,color:active?'#e0e7ff':'#94a3b8',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Bottom actions */}
+      <div style={{padding:'8px',borderTop:'1px solid rgba(255,255,255,0.06)'}}>
+        <button onClick={onNewProject} style={{display:'flex',alignItems:'center',gap:6,width:'100%',padding:'8px 10px',borderRadius:8,background:'transparent',border:'1px dashed rgba(99,102,241,0.4)',color:'#818cf8',fontSize:12,fontWeight:600,cursor:'pointer',marginBottom:8,justifyContent:'center',transition:'all 0.15s'}} onMouseEnter={e=>{e.currentTarget.style.background='rgba(99,102,241,0.1)';}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';}}>
+          + New Project
+        </button>
+        {link && (
+          <>
+            <button onClick={()=>setShowShare(!showShare)} style={{display:'flex',alignItems:'center',gap:6,width:'100%',padding:'7px 10px',borderRadius:8,background:'transparent',border:'none',color:'#475569',fontSize:11,cursor:'pointer',justifyContent:'center'}} onMouseEnter={e=>e.currentTarget.style.color='#94a3b8'} onMouseLeave={e=>e.currentTarget.style.color='#475569'}>
+              🔗 Share / Bookmark link
+            </button>
+            {showShare && (
+              <div style={{background:'rgba(0,0,0,0.3)',borderRadius:8,padding:'8px',marginTop:4}}>
+                <p style={{fontSize:10,color:'#94a3b8',marginBottom:6}}>Bookmark this URL to access from any browser:</p>
+                <input readOnly value={link} onClick={e=>{e.target.select();document.execCommand('copy');}} style={{width:'100%',background:'rgba(0,0,0,0.3)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:4,padding:'4px 6px',fontSize:10,color:'#94a3b8',fontFamily:'monospace',cursor:'pointer'}} title="Click to copy"/>
+                <p style={{fontSize:9,color:'#475569',marginTop:4}}>Click to copy • Contains your credentials</p>
+              </div>
+            )}
+          </>
+        )}
+        <div style={{textAlign:'center',padding:'6px 0 2px',fontSize:10,color:'#334155'}}>DataFlow v1.0</div>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   ADD PROJECT MODAL
+================================================================ */
+function AddProjectModal({ onClose, onCreate }) {
+  const [name,setName] = useState('');
+  const [color,setColor] = useState(GRP_COLORS[0]);
+  async function submit() {
+    if (!name.trim()) return;
+    await onCreate(name.trim(), color);
+    onClose();
+  }
+  return (
+    <Portal>
+      <div onClick={e=>e.target===e.currentTarget&&onClose()} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',zIndex:9998,display:'flex',alignItems:'center',justifyContent:'center'}}>
+        <div style={{background:'#fff',borderRadius:14,padding:28,width:360,boxShadow:'0 20px 50px rgba(0,0,0,0.2)'}}>
+          <h3 style={{fontSize:17,fontWeight:700,color:'#111',marginBottom:20}}>New Project</h3>
+          <label style={{fontSize:12,fontWeight:600,color:'#6b7280',display:'block',marginBottom:5}}>Project Name</label>
+          <input autoFocus value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} placeholder="e.g. Data Platform Q2" style={{width:'100%',border:'1px solid #e5e7eb',borderRadius:8,padding:'9px 12px',fontSize:14,outline:'none',marginBottom:16}} onFocus={e=>e.target.style.borderColor='#6366f1'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
+          <label style={{fontSize:12,fontWeight:600,color:'#6b7280',display:'block',marginBottom:8}}>Color</label>
+          <div style={{display:'flex',gap:8,marginBottom:20}}>
+            {GRP_COLORS.map(c=>(
+              <button key={c} onClick={()=>setColor(c)} style={{width:24,height:24,borderRadius:'50%',background:c,border:c===color?'2px solid #1e1b4b':'2px solid transparent',cursor:'pointer',outline:c===color?'2px solid #6366f1':none,outlineOffset:2}}/>
+            ))}
+          </div>
+          <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+            <Btn onClick={onClose} variant="default">Cancel</Btn>
+            <Btn onClick={submit} variant="primary" disabled={!name.trim()}>Create Project</Btn>
+          </div>
+        </div>
+      </div>
+    </Portal>
+  );
+}
+
+/* ================================================================
+   ADD GROUP MODAL
+================================================================ */
+function AddGroupModal({ onClose, onCreate }) {
+  const [name,setName] = useState('');
+  const [color,setColor] = useState(GRP_COLORS[Math.floor(Math.random()*GRP_COLORS.length)]);
+  async function submit() {
+    if (!name.trim()) return;
+    await onCreate(name.trim(), color);
+    onClose();
+  }
+  return (
+    <Portal>
+      <div onClick={e=>e.target===e.currentTarget&&onClose()} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',zIndex:9998,display:'flex',alignItems:'center',justifyContent:'center'}}>
+        <div style={{background:'#fff',borderRadius:14,padding:28,width:360,boxShadow:'0 20px 50px rgba(0,0,0,0.2)'}}>
+          <h3 style={{fontSize:17,fontWeight:700,color:'#111',marginBottom:20}}>New Group</h3>
+          <label style={{fontSize:12,fontWeight:600,color:'#6b7280',display:'block',marginBottom:5}}>Group Name</label>
+          <input autoFocus value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} placeholder="e.g. Sprint 1, In Flight, Backlog" style={{width:'100%',border:'1px solid #e5e7eb',borderRadius:8,padding:'9px 12px',fontSize:14,outline:'none',marginBottom:16}} onFocus={e=>e.target.style.borderColor='#6366f1'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
+          <label style={{fontSize:12,fontWeight:600,color:'#6b7280',display:'block',marginBottom:8}}>Color</label>
+          <div style={{display:'flex',gap:8,marginBottom:20}}>
+            {GRP_COLORS.map(c=>(
+              <button key={c} onClick={()=>setColor(c)} style={{width:24,height:24,borderRadius:'50%',background:c,border:c===color?'2px solid #1e1b4b':'2px solid transparent',cursor:'pointer',outline:c===color?'2px solid #6366f1':'none',outlineOffset:2}}/>
+            ))}
+          </div>
+          <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+            <Btn onClick={onClose} variant="default">Cancel</Btn>
+            <Btn onClick={submit} variant="primary" disabled={!name.trim()}>Create Group</Btn>
+          </div>
+        </div>
+      </div>
+    </Portal>
+  );
+}
+
+/* ================================================================
+   MANAGE MEMBERS MODAL
+================================================================ */
+function MembersModal({ members, onClose, onAdd }) {
+  const [name,setName] = useState('');
+  const [role,setRole] = useState('');
+  async function submit() {
+    if (!name.trim()) return;
+    const color = GRP_COLORS[Math.floor(Math.random()*GRP_COLORS.length)];
+    await onAdd(name.trim(), role.trim(), color);
+    setName(''); setRole('');
+  }
+  return (
+    <Portal>
+      <div onClick={e=>e.target===e.currentTarget&&onClose()} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',zIndex:9998,display:'flex',alignItems:'center',justifyContent:'center'}}>
+        <div style={{background:'#fff',borderRadius:14,padding:28,width:420,maxHeight:'80vh',overflowY:'auto',boxShadow:'0 20px 50px rgba(0,0,0,0.2)'}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
+            <h3 style={{fontSize:17,fontWeight:700,color:'#111'}}>Team Members</h3>
+            <button onClick={onClose} style={{background:'#f3f4f6',border:'none',borderRadius:6,width:28,height:28,cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center',color:'#6b7280'}}>×</button>
+          </div>
+          <div style={{marginBottom:20}}>
+            {members.map(m=>(
+              <div key={m.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderBottom:'1px solid #f3f4f6'}}>
+                <Avatar name={m.name} color={m.color} size={32}/>
+                <div>
+                  <div style={{fontSize:13,fontWeight:600,color:'#374151'}}>{m.name}</div>
+                  {m.role && <div style={{fontSize:11,color:'#9ca3af'}}>{m.role}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{borderTop:'2px solid #f3f4f6',paddingTop:16}}>
+            <div style={{fontSize:13,fontWeight:600,color:'#374151',marginBottom:12}}>Add Team Member</div>
+            <input value={name} onChange={e=>setName(e.target.value)} placeholder="Full name" style={{width:'100%',border:'1px solid #e5e7eb',borderRadius:8,padding:'8px 12px',fontSize:13,outline:'none',marginBottom:8}} onFocus={e=>e.target.style.borderColor='#6366f1'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
+            <input value={role} onChange={e=>setRole(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} placeholder="Role (e.g. Data Engineer)" style={{width:'100%',border:'1px solid #e5e7eb',borderRadius:8,padding:'8px 12px',fontSize:13,outline:'none',marginBottom:12}} onFocus={e=>e.target.style.borderColor='#6366f1'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
+            <Btn onClick={submit} variant="primary" disabled={!name.trim()}>Add Member</Btn>
+          </div>
+        </div>
+      </div>
+    </Portal>
+  );
+}
+
+/* ================================================================
+   MAIN APP
+================================================================ */
+function App() {
+  const [cfg, setCfg] = useState(()=>loadConfig());
+  const [projects, setProjects] = useState([]);
+  const [selectedProjId, setSelectedProjId] = useState(null);
+  const [groups, setGroups] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [view, setView] = useState('table'); // table | kanban | timeline
+  const [loading, setLoading] = useState(false);
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [showAddProject, setShowAddProject] = useState(false);
+  const [showAddGroup, setShowAddGroup] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
+  const [search, setSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterPriority, setFilterPriority] = useState('');
+
+  // Init DB on config
+  useEffect(()=>{
+    if (cfg) {
+      initDB(cfg.url, cfg.key);
+      loadProjects();
+      loadMembers();
+    }
+  },[cfg]);
+
+  // Load groups+tasks when project changes
+  useEffect(()=>{
+    if (selectedProjId) loadBoard();
+  },[selectedProjId]);
+
+  async function loadProjects() {
+    try {
+      const ps = await api.getProjects();
+      setProjects(ps);
+      if (ps.length>0 && !selectedProjId) setSelectedProjId(ps[0].id);
+    } catch(e){ console.error(e); }
+  }
+
+  async function loadMembers() {
+    try { const ms = await api.getMembers(); setMembers(ms); }
+    catch(e){}
+  }
+
+  async function loadBoard() {
+    setLoading(true);
+    try {
+      const [gs, ts] = await Promise.all([api.getGroups(selectedProjId), api.getTasks(selectedProjId)]);
+      setGroups(gs); setTasks(ts);
+    } catch(e){ console.error(e); }
+    setLoading(false);
+  }
+
+  async function handleCreateProject(name, color) {
+    try {
+      const p = await api.createProject(name, color);
+      await loadProjects();
+      setSelectedProjId(p.id);
+    } catch(e){ alert('Error: '+e.message); }
+  }
+
+  async function handleCreateGroup(name, color) {
+    try {
+      await api.createGroup(selectedProjId, name, color, groups.length);
+      await loadBoard();
+    } catch(e){ alert('Error: '+e.message); }
+  }
+
+  async function handleAddMember(name, role, color) {
+    try {
+      await api.createMember(name, role, color);
+      await loadMembers();
+    } catch(e){ alert('Error: '+e.message); }
+  }
+
+  async function handleDeleteTask(taskId) {
+    try { await api.deleteTask(taskId); await loadBoard(); }
+    catch(e){ alert('Error: '+e.message); }
+  }
+
+  function handleTaskUpdate(updated) {
+    setTasks(ts=>ts.map(t=>t.id===updated.id?updated:t));
+    if (selectedTask?.id===updated.id) setSelectedTask(updated);
+  }
+
+  const selectedProject = projects.find(p=>p.id===selectedProjId);
+
+  // Filtered tasks
+  const filteredTasks = useMemo(()=>{
+    return tasks.filter(t=>{
+      if (search && !t.name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (filterStatus && t.status!==filterStatus) return false;
+      if (filterPriority && t.priority!==filterPriority) return false;
+      return true;
+    });
+  },[tasks,search,filterStatus,filterPriority]);
+
+  // Stats
+  const stats = useMemo(()=>{
+    const total = tasks.length;
+    const done = tasks.filter(t=>t.status==='Done').length;
+    const blocked = tasks.filter(t=>t.status==='Blocked').length;
+    const overdue = tasks.filter(t=>isOverdue(t.due_date)&&t.status!=='Done').length;
+    return { total, done, blocked, overdue };
+  },[tasks]);
+
+  if (!cfg) return <SetupScreen onDone={()=>{ const c=loadConfig(); setCfg(c); }}/>;
+
+  const VIEWS = [
+    { id:'table', label:'📋 Table', title:'Board' },
+    { id:'kanban', label:'🗂 Kanban', title:'Kanban' },
+    { id:'timeline', label:'📅 Timeline', title:'Timeline' },
+  ];
+
+  return (
+    <div style={{display:'flex',height:'100vh',overflow:'hidden'}}>
+      <Sidebar projects={projects} selectedId={selectedProjId} onSelect={id=>{setSelectedProjId(id);setView('table');}} onNewProject={()=>setShowAddProject(true)}/>
+
+      {/* Main content */}
+      <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
+        {/* Top bar */}
+        <div style={{background:'#fff',borderBottom:'1px solid #e9ecef',padding:'0 20px',display:'flex',alignItems:'center',gap:12,height:56,flexShrink:0}}>
+          {selectedProject && (
+            <>
+              <div style={{display:'flex',alignItems:'center',gap:8,marginRight:4}}>
+                <span style={{width:12,height:12,borderRadius:'50%',background:selectedProject.color||'#6366f1',display:'inline-block'}}/>
+                <span style={{fontSize:16,fontWeight:700,color:'#111'}}>{selectedProject.name}</span>
+              </div>
+              {/* Stats chips */}
+              <div style={{display:'flex',gap:6}}>
+                {[
+                  {label:`${stats.total} total`,bg:'#f3f4f6',c:'#6b7280'},
+                  {label:`${stats.done} done`,bg:'#d1fae5',c:'#065f46'},
+                  stats.blocked>0?{label:`${stats.blocked} blocked`,bg:'#fee2e2',c:'#991b1b'}:null,
+                  stats.overdue>0?{label:`${stats.overdue} overdue`,bg:'#fef3c7',c:'#92400e'}:null,
+                ].filter(Boolean).map((s,i)=>(
+                  <span key={i} style={{background:s.bg,color:s.c,fontSize:11,fontWeight:600,borderRadius:10,padding:'2px 9px'}}>{s.label}</span>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* View tabs */}
+          <div style={{marginLeft:'auto',display:'flex',gap:2,background:'#f3f4f6',borderRadius:8,padding:3}}>
+            {VIEWS.map(v=>(
+              <button key={v.id} onClick={()=>setView(v.id)} style={{padding:'5px 12px',borderRadius:6,border:'none',fontSize:12,fontWeight:600,cursor:'pointer',background:view===v.id?'#fff':'transparent',color:view===v.id?'#374151':'#9ca3af',boxShadow:view===v.id?'0 1px 3px rgba(0,0,0,0.1)':'none',transition:'all 0.15s'}}>
+                {v.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Actions */}
+          <div style={{display:'flex',gap:8,marginLeft:8}}>
+            <button onClick={()=>setShowMembers(true)} title="Manage team" style={{background:'#f3f4f6',border:'none',borderRadius:8,padding:'6px 10px',fontSize:12,fontWeight:600,color:'#6b7280',cursor:'pointer',display:'flex',alignItems:'center',gap:5}}>👥 Team</button>
+            <button onClick={()=>loadBoard()} title="Refresh" style={{background:'#f3f4f6',border:'none',borderRadius:8,padding:'6px 10px',fontSize:16,color:'#6b7280',cursor:'pointer'}}>↻</button>
+          </div>
+        </div>
+
+        {/* Filter bar */}
+        {selectedProjId && (
+          <div style={{background:'#fff',borderBottom:'1px solid #f3f4f6',padding:'8px 20px',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Search tasks…" style={{border:'1px solid #e5e7eb',borderRadius:7,padding:'5px 10px',fontSize:12,outline:'none',width:200}}/>
+            <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} style={{border:'1px solid #e5e7eb',borderRadius:7,padding:'5px 10px',fontSize:12,outline:'none',color:filterStatus?'#374151':'#9ca3af',background:'#fff',cursor:'pointer'}}>
+              <option value="">All Statuses</option>
+              {STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
+            </select>
+            <select value={filterPriority} onChange={e=>setFilterPriority(e.target.value)} style={{border:'1px solid #e5e7eb',borderRadius:7,padding:'5px 10px',fontSize:12,outline:'none',color:filterPriority?'#374151':'#9ca3af',background:'#fff',cursor:'pointer'}}>
+              <option value="">All Priorities</option>
+              {PRIORITIES.map(p=><option key={p} value={p}>{p}</option>)}
+            </select>
+            {(search||filterStatus||filterPriority) && (
+              <button onClick={()=>{setSearch('');setFilterStatus('');setFilterPriority('');}} style={{fontSize:12,color:'#6366f1',background:'transparent',border:'none',cursor:'pointer',fontWeight:600}}>✕ Clear</button>
+            )}
+            <span style={{marginLeft:'auto',fontSize:12,color:'#9ca3af'}}>{filteredTasks.length}/{tasks.length} tasks</span>
+          </div>
+        )}
+
+        {/* Content area */}
+        {!selectedProjId
+          ? <EmptyState message="Select or create a project to get started" icon="📁"/>
+          : loading
+            ? <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#9ca3af',fontSize:14}}>Loading…</div>
+            : (
+              <div style={{flex:1,display:'flex',overflow:'hidden',minHeight:0}}>
+                {view==='table' && <TableView groups={groups} tasks={filteredTasks} members={members} projectId={selectedProjId} onAddGroup={()=>setShowAddGroup(true)} onTaskClick={setSelectedTask} onRefresh={loadBoard}/>}
+                {view==='kanban' && <KanbanView tasks={filteredTasks} members={members} projectId={selectedProjId} groups={groups} onTaskClick={setSelectedTask} onRefresh={loadBoard}/>}
+                {view==='timeline' && <TimelineView tasks={filteredTasks} groups={groups}/>}
+              </div>
+            )
+        }
+      </div>
+
+      {/* Modals */}
+      {selectedTask && (
+        <TaskModal task={selectedTask} members={members} onClose={()=>setSelectedTask(null)} onUpdate={handleTaskUpdate} onDelete={handleDeleteTask}/>
+      )}
+      {showAddProject && <AddProjectModal onClose={()=>setShowAddProject(false)} onCreate={handleCreateProject}/>}
+      {showAddGroup && <AddGroupModal onClose={()=>setShowAddGroup(false)} onCreate={handleCreateGroup}/>}
+      {showMembers && <MembersModal members={members} onClose={()=>setShowMembers(false)} onAdd={handleAddMember}/>}
+    </div>
+  );
+}
+
+function EmptyState({ message, icon }) {
+  return (
+    <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#9ca3af'}}>
+      <div style={{fontSize:48,marginBottom:12}}>{icon}</div>
+      <div style={{fontSize:14,fontWeight:500}}>{message}</div>
+    </div>
+  );
+}
+
+/* ================================================================
+   RENDER
+================================================================ */
+const _root = ReactDOM.createRoot(document.getElementById('root'));
+_root.render(<App/>);
+</script>
+</body>
+</html>
