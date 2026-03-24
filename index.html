@@ -186,95 +186,13 @@ function Portal({ children }) {
   return ReactDOM.createPortal(children, document.body);
 }
 
-function StatusChip({ value, onChange, size='sm' }) {
-  const [open,setOpen] = useState(false);
-  const ref = useRef();
-  const cfg = STATUS_CFG[value]||STATUS_CFG['Not Started'];
-  const close = useCallback(()=>setOpen(false),[]);
-  useOutsideClick(ref, close);
-  const fs = size==='sm' ? 11 : 13;
-  const px = size==='sm' ? '4px 10px' : '6px 14px';
-  return (
-    <div ref={ref} style={{position:'relative',display:'inline-flex'}}>
-      <button onClick={()=>onChange&&setOpen(!open)} style={{background:cfg.bg,color:cfg.text,padding:px,borderRadius:20,fontSize:fs,fontWeight:700,display:'inline-flex',alignItems:'center',gap:5,cursor:onChange?'pointer':'default',whiteSpace:'nowrap',border:'none',minWidth:size==='sm'?100:120,justifyContent:'center'}}>
-        <span style={{width:6,height:6,borderRadius:'50%',background:cfg.dot,flexShrink:0}}/>
-        {value}
-        {onChange && <span style={{fontSize:9,opacity:0.6,marginLeft:2}}>▾</span>}
-      </button>
-      {open && (
-        <Portal>
-          <StatusDropdown anchor={ref} value={value} onChange={v=>{onChange(v);setOpen(false);}} onClose={close}/>
-        </Portal>
-      )}
-    </div>
-  );
-}
-
-function StatusDropdown({ anchor, value, onChange, onClose }) {
-  const ref = useRef();
-  const [pos,setPos] = useState({top:0,left:0});
-  useOutsideClick(ref, onClose);
-  useEffect(()=>{
-    if(anchor.current){
-      const r=anchor.current.getBoundingClientRect();
-      setPos({top:r.bottom+4,left:r.left});
-    }
-  },[]);
-  return (
-    <div ref={ref} style={{position:'fixed',top:pos.top,left:pos.left,zIndex:99999,background:'#fff',border:'1px solid #e5e7eb',borderRadius:10,boxShadow:'0 10px 30px rgba(0,0,0,0.13)',padding:'4px 0',minWidth:175}}>
-      <div style={{padding:'6px 12px 3px',fontSize:10,color:'#9ca3af',fontWeight:700,letterSpacing:'0.06em',textTransform:'uppercase'}}>Set Status</div>
-      {STATUSES.map(s=>{
-        const c=STATUS_CFG[s];
-        return <DropItem key={s} active={s===value} onClick={()=>onChange(s)} icon={<span style={{width:8,height:8,borderRadius:'50%',background:c.dot,display:'inline-block'}}/>} label={s}/>;
-      })}
-    </div>
-  );
-}
-
-function PriorityChip({ value, onChange, size='sm' }) {
-  const [open,setOpen] = useState(false);
-  const ref = useRef();
-  const cfg = PRIORITY_CFG[value]||PRIORITY_CFG['Medium'];
-  const close = useCallback(()=>setOpen(false),[]);
-  useOutsideClick(ref, close);
-  return (
-    <div ref={ref} style={{position:'relative',display:'inline-flex'}}>
-      <button onClick={()=>onChange&&setOpen(!open)} style={{display:'inline-flex',alignItems:'center',gap:5,cursor:onChange?'pointer':'default',fontSize:size==='sm'?11:13,fontWeight:600,color:cfg.color,border:'none',background:'transparent',padding:'4px 6px',borderRadius:6}}>
-        <span style={{width:8,height:8,borderRadius:2,background:cfg.color,flexShrink:0}}/>
-        {value}
-        {onChange && <span style={{fontSize:9,opacity:0.6}}>▾</span>}
-      </button>
-      {open && (
-        <Portal>
-          <PriorityDropdown anchor={ref} value={value} onChange={v=>{onChange(v);setOpen(false);}} onClose={close}/>
-        </Portal>
-      )}
-    </div>
-  );
-}
-
-function PriorityDropdown({ anchor, value, onChange, onClose }) {
-  const ref = useRef();
-  const [pos,setPos] = useState({top:0,left:0});
-  useOutsideClick(ref, onClose);
-  useEffect(()=>{
-    if(anchor.current){const r=anchor.current.getBoundingClientRect();setPos({top:r.bottom+4,left:r.left});}
-  },[]);
-  return (
-    <div ref={ref} style={{position:'fixed',top:pos.top,left:pos.left,zIndex:99999,background:'#fff',border:'1px solid #e5e7eb',borderRadius:10,boxShadow:'0 10px 30px rgba(0,0,0,0.13)',padding:'4px 0',minWidth:150}}>
-      <div style={{padding:'6px 12px 3px',fontSize:10,color:'#9ca3af',fontWeight:700,letterSpacing:'0.06em',textTransform:'uppercase'}}>Priority</div>
-      {PRIORITIES.map(p=>{
-        const c=PRIORITY_CFG[p];
-        return <DropItem key={p} active={p===value} onClick={()=>onChange(p)} icon={<span style={{width:8,height:8,borderRadius:2,background:c.color,display:'inline-block'}}/>} label={p}/>;
-      })}
-    </div>
-  );
-}
-
+/* Shared inline-dropdown helper — renders as a child of the chip so
+   useOutsideClick on the chip ref correctly includes the menu.         */
 function DropItem({ active, onClick, icon, label }) {
   const [hov,setHov] = useState(false);
   return (
-    <div onClick={onClick} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} style={{padding:'7px 12px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,background:hov||active?'#f3f4f6':'transparent'}}>
+    <div onClick={onClick} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      style={{padding:'7px 12px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,background:hov||active?'#f3f4f6':'transparent'}}>
       {icon}
       <span style={{fontSize:13,color:'#374151'}}>{label}</span>
       {active && <span style={{marginLeft:'auto',color:'#10b981',fontSize:13}}>✓</span>}
@@ -282,52 +200,152 @@ function DropItem({ active, onClick, icon, label }) {
   );
 }
 
-function OwnerChip({ value, members, onChange }) {
-  const [open,setOpen] = useState(false);
+function MenuBox({ pos, children }) {
+  return (
+    <div style={{position:'fixed',top:pos.top,left:pos.left,zIndex:99999,background:'#fff',
+      border:'1px solid #e5e7eb',borderRadius:10,boxShadow:'0 10px 30px rgba(0,0,0,0.13)',
+      padding:'4px 0',minWidth:175}}>
+      {children}
+    </div>
+  );
+}
+
+function MenuLabel({ children }) {
+  return <div style={{padding:'6px 12px 3px',fontSize:10,color:'#9ca3af',fontWeight:700,letterSpacing:'0.06em',textTransform:'uppercase'}}>{children}</div>;
+}
+
+function useDropPos(ref) {
+  const [pos, setPos] = useState({top:0,left:0});
+  const capture = useCallback(() => {
+    if (ref.current) {
+      const r = ref.current.getBoundingClientRect();
+      setPos({top: r.bottom+4, left: r.left});
+    }
+  }, [ref]);
+  return [pos, capture];
+}
+
+/* ---- STATUS CHIP ---- */
+function StatusChip({ value, onChange, size='sm' }) {
+  const [open, setOpen] = useState(false);
   const ref = useRef();
+  const cfg = STATUS_CFG[value]||STATUS_CFG['Not Started'];
   const close = useCallback(()=>setOpen(false),[]);
+  // Dropdown is a child of ref so outside-click correctly ignores it
   useOutsideClick(ref, close);
+  const [pos, capturePos] = useDropPos(ref);
+  const fs = size==='sm' ? 11 : 13;
+  const px = size==='sm' ? '4px 10px' : '6px 14px';
+  function toggle() { if (!onChange) return; capturePos(); setOpen(v=>!v); }
   return (
     <div ref={ref} style={{position:'relative',display:'inline-flex'}}>
-      <button onClick={()=>onChange&&setOpen(!open)} style={{display:'flex',alignItems:'center',gap:6,border:'none',background:'transparent',cursor:onChange?'pointer':'default',padding:'2px 4px',borderRadius:6}}>
-        {value ? <><Avatar name={value} size={22}/><span style={{fontSize:12,color:'#374151',maxWidth:80,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{value}</span></> : <span style={{fontSize:12,color:'#9ca3af'}}>— Assign</span>}
-        {onChange && <span style={{fontSize:9,opacity:0.5,color:'#9ca3af'}}>▾</span>}
+      <button onClick={toggle} style={{background:cfg.bg,color:cfg.text,padding:px,borderRadius:20,
+        fontSize:fs,fontWeight:700,display:'inline-flex',alignItems:'center',gap:5,
+        cursor:onChange?'pointer':'default',whiteSpace:'nowrap',border:'none',
+        minWidth:size==='sm'?100:120,justifyContent:'center'}}>
+        <span style={{width:6,height:6,borderRadius:'50%',background:cfg.dot,flexShrink:0}}/>
+        {value}
+        {onChange && <span style={{fontSize:9,opacity:0.6,marginLeft:2}}>▾</span>}
       </button>
       {open && (
-        <Portal>
-          <OwnerDropdown anchor={ref} value={value} members={members} onChange={v=>{onChange(v);setOpen(false);}} onClose={close}/>
-        </Portal>
+        <MenuBox pos={pos}>
+          <MenuLabel>Set Status</MenuLabel>
+          {STATUSES.map(s=>{
+            const c=STATUS_CFG[s];
+            return <DropItem key={s} active={s===value}
+              onClick={()=>{onChange(s);setOpen(false);}}
+              icon={<span style={{width:8,height:8,borderRadius:'50%',background:c.dot,display:'inline-block'}}/>}
+              label={s}/>;
+          })}
+        </MenuBox>
       )}
     </div>
   );
 }
 
-function OwnerDropdown({ anchor, value, members, onChange, onClose }) {
+/* ---- PRIORITY CHIP ---- */
+function PriorityChip({ value, onChange, size='sm' }) {
+  const [open, setOpen] = useState(false);
   const ref = useRef();
-  const [pos,setPos] = useState({top:0,left:0});
-  const [search,setSearch] = useState('');
-  useOutsideClick(ref, onClose);
-  useEffect(()=>{
-    if(anchor.current){const r=anchor.current.getBoundingClientRect();setPos({top:r.bottom+4,left:r.left});}
-  },[]);
+  const cfg = PRIORITY_CFG[value]||PRIORITY_CFG['Medium'];
+  const close = useCallback(()=>setOpen(false),[]);
+  useOutsideClick(ref, close);
+  const [pos, capturePos] = useDropPos(ref);
+  function toggle() { if (!onChange) return; capturePos(); setOpen(v=>!v); }
+  return (
+    <div ref={ref} style={{position:'relative',display:'inline-flex'}}>
+      <button onClick={toggle} style={{display:'inline-flex',alignItems:'center',gap:5,
+        cursor:onChange?'pointer':'default',fontSize:size==='sm'?11:13,fontWeight:600,
+        color:cfg.color,border:'none',background:'transparent',padding:'4px 6px',borderRadius:6}}>
+        <span style={{width:8,height:8,borderRadius:2,background:cfg.color,flexShrink:0}}/>
+        {value}
+        {onChange && <span style={{fontSize:9,opacity:0.6}}>▾</span>}
+      </button>
+      {open && (
+        <MenuBox pos={pos}>
+          <MenuLabel>Priority</MenuLabel>
+          {PRIORITIES.map(p=>{
+            const c=PRIORITY_CFG[p];
+            return <DropItem key={p} active={p===value}
+              onClick={()=>{onChange(p);setOpen(false);}}
+              icon={<span style={{width:8,height:8,borderRadius:2,background:c.color,display:'inline-block'}}/>}
+              label={p}/>;
+          })}
+        </MenuBox>
+      )}
+    </div>
+  );
+}
+
+/* ---- OWNER CHIP ---- */
+function OwnerChip({ value, members, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef();
+  const close = useCallback(()=>{ setOpen(false); setSearch(''); },[]);
+  useOutsideClick(ref, close);
+  const [pos, capturePos] = useDropPos(ref);
+  function toggle() { if (!onChange) return; capturePos(); setOpen(v=>!v); }
   const filtered = members.filter(m=>m.name.toLowerCase().includes(search.toLowerCase()));
   return (
-    <div ref={ref} style={{position:'fixed',top:pos.top,left:pos.left,zIndex:99999,background:'#fff',border:'1px solid #e5e7eb',borderRadius:10,boxShadow:'0 10px 30px rgba(0,0,0,0.13)',padding:'4px 0',minWidth:200}}>
-      <div style={{padding:'6px 10px'}}>
-        <input autoFocus value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search members…" style={{width:'100%',border:'1px solid #e5e7eb',borderRadius:6,padding:'5px 8px',fontSize:12,outline:'none'}}/>
-      </div>
-      {value && <DropItem active={false} onClick={()=>onChange(null)} icon={<span style={{width:8,height:8,borderRadius:'50%',background:'#9ca3af',display:'inline-block'}}/>} label="Unassign"/>}
-      {filtered.map(m=>(
-        <div key={m.id} onClick={()=>onChange(m.name)} style={{padding:'6px 12px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,background:m.name===value?'#f3f4f6':'transparent'}} onMouseEnter={e=>e.currentTarget.style.background='#f9fafb'} onMouseLeave={e=>e.currentTarget.style.background=m.name===value?'#f3f4f6':'transparent'}>
-          <Avatar name={m.name} color={m.color} size={22}/>
-          <div style={{display:'flex',flexDirection:'column'}}>
-            <span style={{fontSize:13,color:'#374151',fontWeight:500}}>{m.name}</span>
-            {m.role && <span style={{fontSize:11,color:'#9ca3af'}}>{m.role}</span>}
+    <div ref={ref} style={{position:'relative',display:'inline-flex'}}>
+      <button onClick={toggle} style={{display:'flex',alignItems:'center',gap:6,border:'none',
+        background:'transparent',cursor:onChange?'pointer':'default',padding:'2px 4px',borderRadius:6}}>
+        {value
+          ? <><Avatar name={value} size={22}/>
+              <span style={{fontSize:12,color:'#374151',maxWidth:80,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{value}</span></>
+          : <span style={{fontSize:12,color:'#9ca3af'}}>— Assign</span>}
+        {onChange && <span style={{fontSize:9,opacity:0.5,color:'#9ca3af'}}>▾</span>}
+      </button>
+      {open && (
+        <div style={{position:'fixed',top:pos.top,left:pos.left,zIndex:99999,background:'#fff',
+          border:'1px solid #e5e7eb',borderRadius:10,boxShadow:'0 10px 30px rgba(0,0,0,0.13)',
+          padding:'4px 0',minWidth:210}}>
+          <div style={{padding:'6px 10px'}}>
+            <input autoFocus value={search} onChange={e=>setSearch(e.target.value)}
+              placeholder="Search members…"
+              style={{width:'100%',border:'1px solid #e5e7eb',borderRadius:6,padding:'5px 8px',fontSize:12,outline:'none'}}/>
           </div>
-          {m.name===value && <span style={{marginLeft:'auto',color:'#10b981',fontSize:13}}>✓</span>}
+          {value && <DropItem active={false} onClick={()=>{onChange(null);setOpen(false);}}
+            icon={<span style={{width:8,height:8,borderRadius:'50%',background:'#9ca3af',display:'inline-block'}}/>}
+            label="Unassign"/>}
+          {filtered.map(m=>(
+            <div key={m.id} onClick={()=>{onChange(m.name);setOpen(false);}}
+              style={{padding:'6px 12px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,
+                background:m.name===value?'#f3f4f6':'transparent'}}
+              onMouseEnter={e=>e.currentTarget.style.background='#f9fafb'}
+              onMouseLeave={e=>e.currentTarget.style.background=m.name===value?'#f3f4f6':'transparent'}>
+              <Avatar name={m.name} color={m.color} size={22}/>
+              <div style={{display:'flex',flexDirection:'column'}}>
+                <span style={{fontSize:13,color:'#374151',fontWeight:500}}>{m.name}</span>
+                {m.role && <span style={{fontSize:11,color:'#9ca3af'}}>{m.role}</span>}
+              </div>
+              {m.name===value && <span style={{marginLeft:'auto',color:'#10b981',fontSize:13}}>✓</span>}
+            </div>
+          ))}
+          {filtered.length===0 && <div style={{padding:'8px 12px',fontSize:12,color:'#9ca3af'}}>No members found</div>}
         </div>
-      ))}
-      {filtered.length===0 && <div style={{padding:'8px 12px',fontSize:12,color:'#9ca3af'}}>No members found</div>}
+      )}
     </div>
   );
 }
@@ -1041,6 +1059,32 @@ function MembersModal({ members, onClose, onAdd }) {
 }
 
 /* ================================================================
+   ERROR BOUNDARY — catches render crashes, shows message not blank page
+================================================================ */
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(e) { return { error: e }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#fef2f2',fontFamily:'Inter,sans-serif'}}>
+          <div style={{background:'#fff',borderRadius:12,padding:32,maxWidth:480,width:'100%',boxShadow:'0 4px 24px rgba(0,0,0,0.08)',border:'1px solid #fecaca'}}>
+            <div style={{fontSize:32,marginBottom:12}}>⚠️</div>
+            <h2 style={{fontSize:18,fontWeight:700,color:'#991b1b',marginBottom:8}}>Something went wrong</h2>
+            <p style={{fontSize:13,color:'#6b7280',marginBottom:16}}>The app hit an unexpected error. Try refreshing the page.</p>
+            <pre style={{background:'#fee2e2',borderRadius:8,padding:12,fontSize:11,color:'#7f1d1d',overflowX:'auto',marginBottom:16}}>{this.state.error.toString()}</pre>
+            <button onClick={()=>window.location.reload()} style={{background:'#ef4444',color:'#fff',border:'none',borderRadius:8,padding:'8px 16px',fontSize:13,fontWeight:600,cursor:'pointer'}}>
+              Reload App
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+/* ================================================================
    MAIN APP
 ================================================================ */
 function App() {
@@ -1259,7 +1303,7 @@ function EmptyState({ message, icon }) {
    RENDER
 ================================================================ */
 const _root = ReactDOM.createRoot(document.getElementById('root'));
-_root.render(<App/>);
+_root.render(<ErrorBoundary><App/></ErrorBoundary>);
 </script>
 </body>
 </html>
