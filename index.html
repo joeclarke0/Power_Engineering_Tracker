@@ -592,6 +592,10 @@ function TableView({ groups, tasks, members, projectId, onAddGroup, onTaskClick,
   const [editingGroup, setEditingGroup] = useState(null);
   const [editGroupName, setEditGroupName] = useState('');
 
+  // Drag-and-drop state
+  const [dragId, setDragId] = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
+
   async function handleAddTask(groupId) {
     if (!newTaskName.trim()) { setAddingTask(null); return; }
     const grpTasks = tasks.filter(t=>t.group_id===groupId);
@@ -621,13 +625,50 @@ function TableView({ groups, tasks, members, projectId, onAddGroup, onTaskClick,
     }
   }
 
-  const COL = { check:40, name:1, status:130, priority:110, owner:150, due:110, actions:50 };
+  // ── Drag-and-drop handlers ──────────────────────────────────────
+  function handleDragStart(taskId) { setDragId(taskId); }
+
+  function handleDragOver(taskId) {
+    if (taskId !== dragId) setDragOverId(taskId);
+  }
+
+  async function handleDrop(toTaskId) {
+    if (!dragId || dragId === toTaskId) return;
+    const fromTask = tasks.find(t => t.id === dragId);
+    const toTask   = tasks.find(t => t.id === toTaskId);
+    if (!fromTask || !toTask) return;
+
+    const newGroupId = toTask.group_id;
+    // Build the new ordered list for the target group
+    const grpTasks = tasks
+      .filter(t => t.group_id === newGroupId)
+      .sort((a, b) => (a.position||0) - (b.position||0));
+    const withoutDragged = grpTasks.filter(t => t.id !== dragId);
+    const insertIdx = withoutDragged.findIndex(t => t.id === toTaskId);
+    withoutDragged.splice(insertIdx >= 0 ? insertIdx : withoutDragged.length, 0, fromTask);
+
+    // Persist new positions (and group change if cross-group)
+    try {
+      await Promise.all(
+        withoutDragged.map((t, i) =>
+          api.updateTask(t.id, { position: i, group_id: newGroupId })
+        )
+      );
+      onRefresh();
+    } catch(e) { console.error('Reorder failed:', e); }
+  }
+
+  function handleDragEnd() { setDragId(null); setDragOverId(null); }
+  // ───────────────────────────────────────────────────────────────
+
+  const GRID = '22px 40px 1fr 130px 110px 150px 110px 50px';
 
   return (
     <div style={{flex:1,overflowY:'auto',padding:'8px 20px 40px'}}>
       {/* Column headers */}
-      <div style={{display:'grid',gridTemplateColumns:`${COL.check}px 1fr ${COL.status}px ${COL.priority}px ${COL.owner}px ${COL.due}px ${COL.actions}px`,gap:0,padding:'0 0 6px',position:'sticky',top:0,background:'#f5f6f8',zIndex:10}}>
-        <div/>
+      <div style={{display:'grid',gridTemplateColumns:GRID,gap:0,padding:'0 0 6px',
+                   position:'sticky',top:0,background:'#f5f6f8',zIndex:10}}>
+        <div/><div/>
         <ColHdr>Task Name</ColHdr>
         <ColHdr>Status</ColHdr>
         <ColHdr>Priority</ColHdr>
@@ -637,39 +678,78 @@ function TableView({ groups, tasks, members, projectId, onAddGroup, onTaskClick,
       </div>
 
       {groups.map((grp, gi) => {
-        const grpTasks = tasks.filter(t=>t.group_id===grp.id);
+        const grpTasks = tasks
+          .filter(t => t.group_id === grp.id)
+          .sort((a, b) => (a.position||0) - (b.position||0));
         const isCollapsed = collapsed[grp.id];
         return (
           <div key={grp.id} style={{marginBottom:16}}>
             {/* Group header */}
-            <div style={{display:'grid',gridTemplateColumns:`${COL.check}px 1fr`,borderRadius:'8px 8px 0 0',background:'#fff',border:`1px solid #e9ecef`,borderLeft:`4px solid ${grp.color||GRP_COLORS[gi%GRP_COLORS.length]}`}}>
-              <button onClick={()=>setCollapsed(c=>({...c,[grp.id]:!isCollapsed}))} style={{background:'transparent',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,color:'#9ca3af',height:36}}>
+            <div style={{display:'grid',gridTemplateColumns:`22px 40px 1fr`,borderRadius:'8px 8px 0 0',
+                         background:'#fff',border:`1px solid #e9ecef`,
+                         borderLeft:`4px solid ${grp.color||GRP_COLORS[gi%GRP_COLORS.length]}`}}>
+              <div/>
+              <button onClick={()=>setCollapsed(c=>({...c,[grp.id]:!isCollapsed}))}
+                style={{background:'transparent',border:'none',cursor:'pointer',display:'flex',
+                        alignItems:'center',justifyContent:'center',fontSize:10,color:'#9ca3af',height:36}}>
                 {isCollapsed?'▶':'▼'}
               </button>
               <div style={{display:'flex',alignItems:'center',gap:8,padding:'0 8px'}}>
                 {editingGroup===grp.id
-                  ? <input autoFocus value={editGroupName} onChange={e=>setEditGroupName(e.target.value)} onBlur={()=>saveGroupName(grp.id)} onKeyDown={e=>{if(e.key==='Enter')saveGroupName(grp.id);if(e.key==='Escape')setEditingGroup(null);}} style={{fontSize:13,fontWeight:600,border:'none',outline:'2px solid #6366f1',borderRadius:4,padding:'2px 6px',background:'transparent',width:'100%'}}/>
-                  : <span onClick={()=>{setEditingGroup(grp.id);setEditGroupName(grp.name);}} style={{fontSize:13,fontWeight:700,color:'#374151',cursor:'text'}} title="Click to rename">{grp.name}</span>
+                  ? <input autoFocus value={editGroupName} onChange={e=>setEditGroupName(e.target.value)}
+                      onBlur={()=>saveGroupName(grp.id)}
+                      onKeyDown={e=>{if(e.key==='Enter')saveGroupName(grp.id);if(e.key==='Escape')setEditingGroup(null);}}
+                      style={{fontSize:13,fontWeight:600,border:'none',outline:'2px solid #6366f1',
+                              borderRadius:4,padding:'2px 6px',background:'transparent',width:'100%'}}/>
+                  : <span onClick={()=>{setEditingGroup(grp.id);setEditGroupName(grp.name);}}
+                      style={{fontSize:13,fontWeight:700,color:'#374151',cursor:'text'}}
+                      title="Click to rename">{grp.name}</span>
                 }
-                <span style={{background:'#f3f4f6',color:'#9ca3af',fontSize:11,fontWeight:600,borderRadius:10,padding:'1px 7px'}}>{grpTasks.length}</span>
-                <button onClick={()=>handleDeleteGroup(grp.id)} style={{marginLeft:'auto',background:'transparent',border:'none',cursor:'pointer',color:'#d1d5db',fontSize:14,padding:'2px 4px',borderRadius:4}} title="Delete group">×</button>
+                <span style={{background:'#f3f4f6',color:'#9ca3af',fontSize:11,fontWeight:600,
+                              borderRadius:10,padding:'1px 7px'}}>{grpTasks.length}</span>
+                <button onClick={()=>handleDeleteGroup(grp.id)}
+                  style={{marginLeft:'auto',background:'transparent',border:'none',cursor:'pointer',
+                          color:'#d1d5db',fontSize:14,padding:'2px 4px',borderRadius:4}}
+                  title="Delete group">×</button>
               </div>
             </div>
 
             {/* Task rows */}
             {!isCollapsed && (
-              <div style={{border:'1px solid #e9ecef',borderTop:'none',borderRadius:'0 0 8px 8px',overflow:'hidden',background:'#fff'}}>
-                {grpTasks.map((task,ti) => (
-                  <TaskRow key={task.id} task={task} members={members} onClick={()=>onTaskClick(task)} onUpdate={u=>handleUpdateTask(task.id,u)} isLast={ti===grpTasks.length-1}/>
+              <div style={{border:'1px solid #e9ecef',borderTop:'none',
+                           borderRadius:'0 0 8px 8px',overflow:'hidden',background:'#fff'}}>
+                {grpTasks.map((task, ti) => (
+                  <TaskRow
+                    key={task.id} task={task} members={members}
+                    onClick={() => onTaskClick(task)}
+                    onUpdate={u => handleUpdateTask(task.id, u)}
+                    isLast={ti === grpTasks.length - 1}
+                    dragId={dragId} dragOverId={dragOverId}
+                    onDragStart={handleDragStart}
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                    onDragEnd={handleDragEnd}
+                  />
                 ))}
 
                 {/* Add task row */}
                 {addingTask===grp.id
-                  ? <div style={{display:'grid',gridTemplateColumns:`${COL.check}px 1fr`,borderTop:'1px solid #f3f4f6',padding:'6px 0'}}>
-                      <div/>
-                      <input autoFocus value={newTaskName} onChange={e=>setNewTaskName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handleAddTask(grp.id);if(e.key==='Escape'){setAddingTask(null);setNewTaskName('');}}} onBlur={()=>handleAddTask(grp.id)} placeholder="Task name…" style={{fontSize:13,border:'none',outline:'none',color:'#374151',paddingRight:12}}/>
+                  ? <div style={{display:'grid',gridTemplateColumns:'22px 40px 1fr',
+                                 borderTop:'1px solid #f3f4f6',padding:'6px 0'}}>
+                      <div/><div/>
+                      <input autoFocus value={newTaskName}
+                        onChange={e=>setNewTaskName(e.target.value)}
+                        onKeyDown={e=>{if(e.key==='Enter')handleAddTask(grp.id);if(e.key==='Escape'){setAddingTask(null);setNewTaskName('');}}}
+                        onBlur={()=>handleAddTask(grp.id)}
+                        placeholder="Task name…"
+                        style={{fontSize:13,border:'none',outline:'none',color:'#374151',paddingRight:12}}/>
                     </div>
-                  : <div onClick={()=>setAddingTask(grp.id)} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 8px 8px 50px',cursor:'pointer',color:'#9ca3af',fontSize:12,fontWeight:500,borderTop:'1px solid #f3f4f6'}} onMouseEnter={e=>{e.currentTarget.style.background='#f9fafb';e.currentTarget.style.color='#6b7280';}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='#9ca3af';}}>
+                  : <div onClick={()=>setAddingTask(grp.id)}
+                      style={{display:'flex',alignItems:'center',gap:6,padding:'8px 8px 8px 72px',
+                              cursor:'pointer',color:'#9ca3af',fontSize:12,fontWeight:500,
+                              borderTop:'1px solid #f3f4f6'}}
+                      onMouseEnter={e=>{e.currentTarget.style.background='#f9fafb';e.currentTarget.style.color='#6b7280';}}
+                      onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='#9ca3af';}}>
                       <span style={{fontSize:16,fontWeight:400}}>+</span> Add task
                     </div>
                 }
@@ -680,7 +760,12 @@ function TableView({ groups, tasks, members, projectId, onAddGroup, onTaskClick,
       })}
 
       {/* Add group */}
-      <button onClick={onAddGroup} style={{display:'flex',alignItems:'center',gap:6,fontSize:13,fontWeight:600,color:'#6366f1',background:'transparent',border:'1px dashed #c7d2fe',borderRadius:8,padding:'8px 16px',cursor:'pointer',marginTop:8,transition:'all 0.15s'}} onMouseEnter={e=>{e.currentTarget.style.background='#eef2ff';}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';}}>
+      <button onClick={onAddGroup}
+        style={{display:'flex',alignItems:'center',gap:6,fontSize:13,fontWeight:600,color:'#6366f1',
+                background:'transparent',border:'1px dashed #c7d2fe',borderRadius:8,padding:'8px 16px',
+                cursor:'pointer',marginTop:8,transition:'all 0.15s'}}
+        onMouseEnter={e=>{e.currentTarget.style.background='#eef2ff';}}
+        onMouseLeave={e=>{e.currentTarget.style.background='transparent';}}>
         <span style={{fontSize:18,lineHeight:1}}>+</span> Add Group
       </button>
     </div>
@@ -691,33 +776,106 @@ function ColHdr({ children }) {
   return <div style={{fontSize:11,fontWeight:600,color:'#9ca3af',textTransform:'uppercase',letterSpacing:'0.05em',padding:'4px 8px'}}>{children}</div>;
 }
 
-function TaskRow({ task, members, onClick, onUpdate, isLast }) {
-  const [hov,setHov] = useState(false);
-  const od = isOverdue(task.due_date) && task.status!=='Done';
-  const COL = { check:40, name:1, status:130, priority:110, owner:150, due:110, actions:50 };
+function TaskRow({ task, members, onClick, onUpdate, isLast,
+                   dragId, dragOverId, onDragStart, onDragOver, onDrop, onDragEnd }) {
+  const [hov, setHov] = useState(false);
+  const [editingDate, setEditingDate] = useState(false);
+  const od = isOverdue(task.due_date) && task.status !== 'Done';
+  const isDragging = dragId === task.id;
+  const isDragOver = dragOverId === task.id && dragId !== task.id;
+  const GRID = '22px 40px 1fr 130px 110px 150px 110px 50px';
 
   return (
-    <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} style={{display:'grid',gridTemplateColumns:`${COL.check}px 1fr ${COL.status}px ${COL.priority}px ${COL.owner}px ${COL.due}px ${COL.actions}px`,borderTop:'1px solid #f3f4f6',background:hov?'#f9fafb':'#fff',minHeight:40,alignItems:'center'}}>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'center'}}>
-        <input type="checkbox" checked={task.status==='Done'} onChange={e=>onUpdate({status:e.target.checked?'Done':'Not Started'})} style={{cursor:'pointer',width:14,height:14,accentColor:'#10b981'}}/>
+    <div
+      draggable={true}
+      onDragStart={e => { e.dataTransfer.effectAllowed='move'; onDragStart(task.id); }}
+      onDragOver={e => { e.preventDefault(); onDragOver(task.id); }}
+      onDrop={e => { e.preventDefault(); onDrop(task.id); }}
+      onDragEnd={onDragEnd}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display:'grid', gridTemplateColumns:GRID,
+        borderTop: isDragOver ? '2px solid #6366f1' : '1px solid #f3f4f6',
+        background: isDragging ? '#eef2ff' : hov ? '#f9fafb' : '#fff',
+        minHeight:40, alignItems:'center',
+        opacity: isDragging ? 0.45 : 1,
+        transition:'background 0.1s',
+      }}
+    >
+      {/* Drag handle */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center',
+                   opacity:hov&&!isDragging?0.45:0,cursor:'grab',color:'#6b7280',
+                   fontSize:15,userSelect:'none',lineHeight:1}}>
+        ⠿
       </div>
-      <div onClick={onClick} style={{padding:'0 8px',fontSize:13,color:'#111',fontWeight:500,cursor:'pointer',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',textDecoration:task.status==='Done'?'line-through':'none',opacity:task.status==='Done'?0.5:1}}>
+
+      {/* Checkbox */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center'}}>
+        <input type="checkbox" checked={task.status==='Done'}
+          onChange={e=>onUpdate({status:e.target.checked?'Done':'Not Started'})}
+          style={{cursor:'pointer',width:14,height:14,accentColor:'#10b981'}}/>
+      </div>
+
+      {/* Task name */}
+      <div onClick={onClick} style={{padding:'0 8px',fontSize:13,color:'#111',fontWeight:500,cursor:'pointer',
+        whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',
+        textDecoration:task.status==='Done'?'line-through':'none',
+        opacity:task.status==='Done'?0.5:1}}>
         {task.name}
       </div>
+
+      {/* Status */}
       <div style={{padding:'0 4px'}}>
         <StatusChip value={task.status} onChange={v=>onUpdate({status:v})} size="sm"/>
       </div>
+
+      {/* Priority */}
       <div style={{padding:'0 4px'}}>
         <PriorityChip value={task.priority} onChange={v=>onUpdate({priority:v})} size="sm"/>
       </div>
+
+      {/* Owner */}
       <div style={{padding:'0 4px'}}>
         <OwnerChip value={task.owner} members={members} onChange={v=>onUpdate({owner:v})}/>
       </div>
-      <div style={{padding:'0 4px',fontSize:12,color:od?'#ef4444':'#6b7280',fontWeight:od?600:400}}>
-        {task.due_date ? (od?'⚠ ':'')+ fmtDate(task.due_date) : <span style={{color:'#d1d5db'}}>—</span>}
+
+      {/* Due date — inline editable */}
+      <div style={{padding:'0 4px'}}>
+        {editingDate ? (
+          <input
+            type="date"
+            autoFocus
+            defaultValue={task.due_date || ''}
+            onBlur={e => { onUpdate({due_date: e.target.value || null}); setEditingDate(false); }}
+            onKeyDown={e => {
+              if (e.key === 'Escape') { setEditingDate(false); }
+              if (e.key === 'Enter') { onUpdate({due_date: e.target.value || null}); setEditingDate(false); }
+            }}
+            onClick={e => e.stopPropagation()}
+            style={{fontSize:11,border:'1px solid #6366f1',borderRadius:5,padding:'3px 5px',
+                    outline:'none',width:108,cursor:'pointer',background:'#fff'}}
+          />
+        ) : (
+          <div
+            onClick={() => setEditingDate(true)}
+            title="Click to set due date"
+            style={{fontSize:12,color:od?'#ef4444':'#6b7280',fontWeight:od?600:400,
+                    cursor:'pointer',padding:'3px 5px',borderRadius:4,
+                    background:hov?'#f3f4f6':'transparent',display:'inline-block',
+                    minWidth:70,transition:'background 0.1s'}}
+          >
+            {task.due_date ? (od ? '⚠ ' : '') + fmtDate(task.due_date)
+                           : <span style={{color:'#d1d5db'}}>— Add date</span>}
+          </div>
+        )}
       </div>
+
+      {/* Open button */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'center',opacity:hov?1:0}}>
-        <button onClick={onClick} title="Open task" style={{background:'transparent',border:'none',cursor:'pointer',color:'#9ca3af',fontSize:14,padding:'2px 4px',borderRadius:4}}>↗</button>
+        <button onClick={onClick} title="Open task"
+          style={{background:'transparent',border:'none',cursor:'pointer',
+                  color:'#9ca3af',fontSize:14,padding:'2px 4px',borderRadius:4}}>↗</button>
       </div>
     </div>
   );

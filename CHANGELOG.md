@@ -5,6 +5,16 @@ Format: `## [version] — YYYY-MM-DD` followed by what changed.
 
 ---
 
+## [1.0.2] — 2026-03-25
+
+### New features
+
+- **Inline due date editing** — click the Due Date cell in any table row to open a native date picker; saves on pick/Enter, cancels on Escape; empty pick clears the date
+- **Drag-and-drop task reordering** — a grip handle (⠿) appears on hover; drag a task to reorder it within its group or move it to another group; new order is persisted to Supabase immediately
+- Drop target highlighted with an indigo line so you always know where the task will land
+
+---
+
 ## [1.0.1] — 2026-03-24
 
 ### Bug fixes
