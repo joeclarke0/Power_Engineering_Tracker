@@ -5,6 +5,16 @@ Format: `## [version] — YYYY-MM-DD` followed by what changed.
 
 ---
 
+## [1.0.3] — 2026-03-25
+
+### New features
+
+- **Edit team members** — hover any member row to reveal a ✏️ button; click to edit name and role inline; Save/Cancel buttons or Enter/Escape to confirm
+- **Remove team members** — hover any member row to reveal a × button; click with confirmation prompt to remove
+- Added `updateMember` and `deleteMember` to the API layer
+
+---
+
 ## [1.0.2] — 2026-03-25
 
 ### New features

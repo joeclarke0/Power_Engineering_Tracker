@@ -123,6 +123,8 @@ const api = {
   // Members
   async getMembers()                   { const {data,error}=await getDB().from('team_members').select('*').order('name'); if(error)throw error; return data||[]; },
   async createMember(name,role,color)  { const {data,error}=await getDB().from('team_members').insert({name,role,color}).select().single(); if(error)throw error; return data; },
+  async updateMember(id,u)             { const {data,error}=await getDB().from('team_members').update(u).eq('id',id).select().single(); if(error)throw error; return data; },
+  async deleteMember(id)               { const {error}=await getDB().from('team_members').delete().eq('id',id); if(error)throw error; },
 };
 
 /* ================================================================
@@ -1176,39 +1178,125 @@ function AddGroupModal({ onClose, onCreate }) {
 /* ================================================================
    MANAGE MEMBERS MODAL
 ================================================================ */
-function MembersModal({ members, onClose, onAdd }) {
-  const [name,setName] = useState('');
-  const [role,setRole] = useState('');
-  async function submit() {
+function MembersModal({ members, onClose, onAdd, onUpdate, onDelete }) {
+  const [name, setName] = useState('');
+  const [role, setRole] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editRole, setEditRole] = useState('');
+  const [hoverId, setHoverId] = useState(null);
+
+  async function submitAdd() {
     if (!name.trim()) return;
     const color = GRP_COLORS[Math.floor(Math.random()*GRP_COLORS.length)];
     await onAdd(name.trim(), role.trim(), color);
     setName(''); setRole('');
   }
+
+  function startEdit(m) {
+    setEditingId(m.id);
+    setEditName(m.name);
+    setEditRole(m.role || '');
+  }
+
+  async function saveEdit(id) {
+    if (editName.trim()) await onUpdate(id, { name: editName.trim(), role: editRole.trim() });
+    setEditingId(null);
+  }
+
+  function cancelEdit() { setEditingId(null); }
+
+  async function confirmDelete(m) {
+    if (confirm(`Remove ${m.name} from the team?`)) await onDelete(m.id);
+  }
+
+  const iStyle = {width:'100%',border:'1px solid #d1d5db',borderRadius:6,padding:'5px 8px',fontSize:13,outline:'none'};
+
   return (
     <Portal>
       <div onClick={e=>e.target===e.currentTarget&&onClose()} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',zIndex:9998,display:'flex',alignItems:'center',justifyContent:'center'}}>
-        <div style={{background:'#fff',borderRadius:14,padding:28,width:420,maxHeight:'80vh',overflowY:'auto',boxShadow:'0 20px 50px rgba(0,0,0,0.2)'}}>
+        <div style={{background:'#fff',borderRadius:14,padding:28,width:440,maxHeight:'82vh',overflowY:'auto',boxShadow:'0 20px 50px rgba(0,0,0,0.2)'}}>
+
+          {/* Header */}
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
             <h3 style={{fontSize:17,fontWeight:700,color:'#111'}}>Team Members</h3>
             <button onClick={onClose} style={{background:'#f3f4f6',border:'none',borderRadius:6,width:28,height:28,cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center',color:'#6b7280'}}>×</button>
           </div>
+
+          {/* Member list */}
           <div style={{marginBottom:20}}>
-            {members.map(m=>(
-              <div key={m.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderBottom:'1px solid #f3f4f6'}}>
-                <Avatar name={m.name} color={m.color} size={32}/>
-                <div>
-                  <div style={{fontSize:13,fontWeight:600,color:'#374151'}}>{m.name}</div>
-                  {m.role && <div style={{fontSize:11,color:'#9ca3af'}}>{m.role}</div>}
+            {members.length === 0 && (
+              <div style={{textAlign:'center',color:'#9ca3af',fontSize:13,padding:'20px 0'}}>No members yet — add one below.</div>
+            )}
+            {members.map(m => (
+              <div key={m.id}
+                onMouseEnter={() => setHoverId(m.id)}
+                onMouseLeave={() => setHoverId(null)}
+                style={{display:'flex',alignItems:'flex-start',gap:10,padding:'10px 0',
+                        borderBottom:'1px solid #f3f4f6'}}>
+
+                {/* Avatar updates live while editing name */}
+                <div style={{paddingTop:editingId===m.id?4:0,flexShrink:0}}>
+                  <Avatar name={editingId===m.id ? (editName||m.name) : m.name} color={m.color} size={32}/>
                 </div>
+
+                {editingId === m.id ? (
+                  /* ── Edit mode ── */
+                  <div style={{flex:1}}>
+                    <input autoFocus value={editName} onChange={e=>setEditName(e.target.value)}
+                      onKeyDown={e=>{if(e.key==='Enter')saveEdit(m.id);if(e.key==='Escape')cancelEdit();}}
+                      placeholder="Full name"
+                      style={{...iStyle,fontWeight:600,marginBottom:6,borderColor:'#6366f1'}}/>
+                    <input value={editRole} onChange={e=>setEditRole(e.target.value)}
+                      onKeyDown={e=>{if(e.key==='Enter')saveEdit(m.id);if(e.key==='Escape')cancelEdit();}}
+                      placeholder="Role (e.g. Data Engineer)"
+                      style={{...iStyle,fontSize:12,color:'#6b7280',marginBottom:8}}/>
+                    <div style={{display:'flex',gap:6}}>
+                      <Btn small variant="primary" onClick={()=>saveEdit(m.id)} disabled={!editName.trim()}>Save</Btn>
+                      <Btn small variant="default" onClick={cancelEdit}>Cancel</Btn>
+                    </div>
+                  </div>
+                ) : (
+                  /* ── Display mode ── */
+                  <>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:13,fontWeight:600,color:'#374151'}}>{m.name}</div>
+                      <div style={{fontSize:11,color:'#9ca3af',marginTop:1}}>{m.role || <span style={{fontStyle:'italic'}}>No role set</span>}</div>
+                    </div>
+                    {/* Action buttons — fade in on hover */}
+                    <div style={{display:'flex',gap:4,alignItems:'center',
+                                 opacity:hoverId===m.id?1:0,transition:'opacity 0.15s',flexShrink:0}}>
+                      <button onClick={()=>startEdit(m)} title="Edit member"
+                        style={{background:'#f3f4f6',border:'none',borderRadius:5,width:26,height:26,
+                                cursor:'pointer',fontSize:12,display:'flex',alignItems:'center',
+                                justifyContent:'center',color:'#6b7280'}}>✏️</button>
+                      <button onClick={()=>confirmDelete(m)} title="Remove member"
+                        style={{background:'#fee2e2',border:'none',borderRadius:5,width:26,height:26,
+                                cursor:'pointer',fontSize:13,display:'flex',alignItems:'center',
+                                justifyContent:'center',color:'#ef4444',fontWeight:700}}>×</button>
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>
+
+          {/* Add member form */}
           <div style={{borderTop:'2px solid #f3f4f6',paddingTop:16}}>
             <div style={{fontSize:13,fontWeight:600,color:'#374151',marginBottom:12}}>Add Team Member</div>
-            <input value={name} onChange={e=>setName(e.target.value)} placeholder="Full name" style={{width:'100%',border:'1px solid #e5e7eb',borderRadius:8,padding:'8px 12px',fontSize:13,outline:'none',marginBottom:8}} onFocus={e=>e.target.style.borderColor='#6366f1'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
-            <input value={role} onChange={e=>setRole(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} placeholder="Role (e.g. Data Engineer)" style={{width:'100%',border:'1px solid #e5e7eb',borderRadius:8,padding:'8px 12px',fontSize:13,outline:'none',marginBottom:12}} onFocus={e=>e.target.style.borderColor='#6366f1'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
-            <Btn onClick={submit} variant="primary" disabled={!name.trim()}>Add Member</Btn>
+            <input value={name} onChange={e=>setName(e.target.value)}
+              onKeyDown={e=>e.key==='Enter'&&submitAdd()}
+              placeholder="Full name"
+              style={{...iStyle,marginBottom:8}}
+              onFocus={e=>e.target.style.borderColor='#6366f1'}
+              onBlur={e=>e.target.style.borderColor='#d1d5db'}/>
+            <input value={role} onChange={e=>setRole(e.target.value)}
+              onKeyDown={e=>e.key==='Enter'&&submitAdd()}
+              placeholder="Role (e.g. Data Engineer)"
+              style={{...iStyle,marginBottom:12}}
+              onFocus={e=>e.target.style.borderColor='#6366f1'}
+              onBlur={e=>e.target.style.borderColor='#d1d5db'}/>
+            <Btn onClick={submitAdd} variant="primary" disabled={!name.trim()}>Add Member</Btn>
           </div>
         </div>
       </div>
@@ -1318,6 +1406,16 @@ function App() {
       await api.createMember(name, role, color);
       await loadMembers();
     } catch(e){ alert('Error: '+e.message); }
+  }
+
+  async function handleUpdateMember(memberId, updates) {
+    try { await api.updateMember(memberId, updates); await loadMembers(); }
+    catch(e){ alert('Error: '+e.message); }
+  }
+
+  async function handleDeleteMember(memberId) {
+    try { await api.deleteMember(memberId); await loadMembers(); }
+    catch(e){ alert('Error: '+e.message); }
   }
 
   async function handleDeleteTask(taskId) {
@@ -1443,7 +1541,7 @@ function App() {
       )}
       {showAddProject && <AddProjectModal onClose={()=>setShowAddProject(false)} onCreate={handleCreateProject}/>}
       {showAddGroup && <AddGroupModal onClose={()=>setShowAddGroup(false)} onCreate={handleCreateGroup}/>}
-      {showMembers && <MembersModal members={members} onClose={()=>setShowMembers(false)} onAdd={handleAddMember}/>}
+      {showMembers && <MembersModal members={members} onClose={()=>setShowMembers(false)} onAdd={handleAddMember} onUpdate={handleUpdateMember} onDelete={handleDeleteMember}/>}
     </div>
   );
 }
