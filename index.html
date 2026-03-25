@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DataFlow — Engineering Task Tracker</title>
+  <title>Joe.com — Engineering Tracker</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
@@ -48,7 +48,7 @@ const PRIORITY_CFG = {
   'Low':      { color: '#9ca3af', bg: '#f3f4f6' },
 };
 
-const GRP_COLORS = ['#3b82f6','#ef4444','#f97316','#10b981','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f59e0b','#6366f1'];
+const GRP_COLORS = ['#3b82f6','#ef4444','#f97316','#10b981','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f59e0b','#18181b'];
 
 /* ================================================================
    CONFIG — stored in localStorage, shareable via URL hash
@@ -357,7 +357,7 @@ function Btn({ onClick, children, variant='default', small, disabled, style: s }
   const base = {display:'inline-flex',alignItems:'center',gap:5,border:'none',borderRadius:6,fontWeight:500,cursor:disabled?'not-allowed':'pointer',transition:'all 0.15s',opacity:disabled?0.5:1,...s};
   const variants = {
     default: {background:hov?'#f9fafb':'#fff',color:'#374151',border:'1px solid #e5e7eb',padding:small?'5px 10px':'7px 14px',fontSize:small?12:13},
-    primary: {background:hov?'#4f46e5':'#6366f1',color:'#fff',padding:small?'5px 12px':'8px 16px',fontSize:small?12:13},
+    primary: {background:hov?'#27272a':'#18181b',color:'#fff',padding:small?'5px 12px':'8px 16px',fontSize:small?12:13},
     danger:  {background:hov?'#dc2626':'#ef4444',color:'#fff',padding:small?'5px 10px':'7px 14px',fontSize:small?12:13},
     ghost:   {background:hov?'#f3f4f6':'transparent',color:'#6b7280',padding:small?'4px 8px':'6px 12px',fontSize:small?12:13},
   };
@@ -395,12 +395,12 @@ function SetupScreen({ onDone }) {
   }
 
   return (
-    <div style={{minHeight:'100vh',background:'linear-gradient(135deg,#1e1b4b 0%,#312e81 50%,#1e1b4b 100%)',display:'flex',alignItems:'center',justifyContent:'center',padding:24}}>
+    <div style={{minHeight:'100vh',background:'linear-gradient(135deg,#09090b 0%,#18181b 50%,#09090b 100%)',display:'flex',alignItems:'center',justifyContent:'center',padding:24}}>
       <div style={{background:'#fff',borderRadius:16,padding:40,maxWidth:520,width:'100%',boxShadow:'0 25px 60px rgba(0,0,0,0.3)'}}>
         <div style={{textAlign:'center',marginBottom:32}}>
-          <div style={{width:56,height:56,background:'linear-gradient(135deg,#6366f1,#8b5cf6)',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:28}}>⚡</div>
-          <h1 style={{fontSize:24,fontWeight:700,color:'#1e1b4b',marginBottom:6}}>DataFlow</h1>
-          <p style={{color:'#6b7280',fontSize:14}}>Engineering Task Tracker — connect your Supabase database to get started</p>
+          <div style={{width:56,height:56,background:'linear-gradient(135deg,#27272a,#3f3f46)',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:28}}>⚡</div>
+          <h1 style={{fontSize:24,fontWeight:700,color:'#09090b',marginBottom:6}}>Joe.com</h1>
+          <p style={{color:'#6b7280',fontSize:14}}>Engineering Tracker — connect your Supabase database to get started</p>
         </div>
 
         <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:16,marginBottom:24,fontSize:13,color:'#475569'}}>
@@ -415,17 +415,17 @@ function SetupScreen({ onDone }) {
 
         <div style={{marginBottom:16}}>
           <label style={{display:'block',fontSize:13,fontWeight:600,color:'#374151',marginBottom:5}}>Supabase Project URL</label>
-          <input value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://xxxxxxxxxxxx.supabase.co" style={{width:'100%',border:'1px solid #d1d5db',borderRadius:8,padding:'10px 12px',fontSize:14,outline:'none',transition:'border 0.15s'}} onFocus={e=>e.target.style.borderColor='#6366f1'} onBlur={e=>e.target.style.borderColor='#d1d5db'}/>
+          <input value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://xxxxxxxxxxxx.supabase.co" style={{width:'100%',border:'1px solid #d1d5db',borderRadius:8,padding:'10px 12px',fontSize:14,outline:'none',transition:'border 0.15s'}} onFocus={e=>e.target.style.borderColor='#18181b'} onBlur={e=>e.target.style.borderColor='#d1d5db'}/>
         </div>
         <div style={{marginBottom:24}}>
           <label style={{display:'block',fontSize:13,fontWeight:600,color:'#374151',marginBottom:5}}>Supabase Anon Key</label>
-          <input value={key} onChange={e=>setKey(e.target.value)} type="password" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9…" style={{width:'100%',border:'1px solid #d1d5db',borderRadius:8,padding:'10px 12px',fontSize:14,outline:'none'}} onFocus={e=>e.target.style.borderColor='#6366f1'} onBlur={e=>e.target.style.borderColor='#d1d5db'}/>
+          <input value={key} onChange={e=>setKey(e.target.value)} type="password" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9…" style={{width:'100%',border:'1px solid #d1d5db',borderRadius:8,padding:'10px 12px',fontSize:14,outline:'none'}} onFocus={e=>e.target.style.borderColor='#18181b'} onBlur={e=>e.target.style.borderColor='#d1d5db'}/>
           <p style={{fontSize:11,color:'#9ca3af',marginTop:4}}>The anon key is safe to use in the browser (it's public by design).</p>
         </div>
 
         {err && <div style={{background:'#fee2e2',color:'#991b1b',borderRadius:8,padding:'10px 14px',fontSize:13,marginBottom:16}}>{err}</div>}
 
-        <button onClick={handleConnect} disabled={loading} style={{width:'100%',background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'#fff',border:'none',borderRadius:8,padding:'12px',fontSize:15,fontWeight:600,cursor:loading?'wait':'pointer',opacity:loading?0.7:1}}>
+        <button onClick={handleConnect} disabled={loading} style={{width:'100%',background:'linear-gradient(135deg,#27272a,#3f3f46)',color:'#fff',border:'none',borderRadius:8,padding:'12px',fontSize:15,fontWeight:600,cursor:loading?'wait':'pointer',opacity:loading?0.7:1}}>
           {loading ? '⏳ Connecting…' : '⚡ Connect to Supabase'}
         </button>
       </div>
@@ -499,7 +499,7 @@ function TaskModal({ task, members, onClose, onUpdate, onDelete, db }) {
                 <PriorityChip value={t.priority} onChange={v=>fieldChange('priority',v)} size="sm"/>
               </div>
               {editingName
-                ? <input autoFocus value={nameVal} onChange={e=>setNameVal(e.target.value)} onBlur={saveName} onKeyDown={e=>{if(e.key==='Enter')saveName();if(e.key==='Escape'){setEditingName(false);setNameVal(t.name);}}} style={{fontSize:20,fontWeight:700,color:'#111',border:'none',outline:'2px solid #6366f1',borderRadius:6,padding:'2px 6px',width:'100%'}}/>
+                ? <input autoFocus value={nameVal} onChange={e=>setNameVal(e.target.value)} onBlur={saveName} onKeyDown={e=>{if(e.key==='Enter')saveName();if(e.key==='Escape'){setEditingName(false);setNameVal(t.name);}}} style={{fontSize:20,fontWeight:700,color:'#111',border:'none',outline:'2px solid #18181b',borderRadius:6,padding:'2px 6px',width:'100%'}}/>
                 : <h2 onClick={()=>setEditingName(true)} style={{fontSize:20,fontWeight:700,color:'#111',cursor:'text',padding:'2px 0',borderRadius:4}} title="Click to edit">{t.name}</h2>
               }
             </div>
@@ -701,7 +701,7 @@ function TableView({ groups, tasks, members, projectId, onAddGroup, onTaskClick,
                   ? <input autoFocus value={editGroupName} onChange={e=>setEditGroupName(e.target.value)}
                       onBlur={()=>saveGroupName(grp.id)}
                       onKeyDown={e=>{if(e.key==='Enter')saveGroupName(grp.id);if(e.key==='Escape')setEditingGroup(null);}}
-                      style={{fontSize:13,fontWeight:600,border:'none',outline:'2px solid #6366f1',
+                      style={{fontSize:13,fontWeight:600,border:'none',outline:'2px solid #18181b',
                               borderRadius:4,padding:'2px 6px',background:'transparent',width:'100%'}}/>
                   : <span onClick={()=>{setEditingGroup(grp.id);setEditGroupName(grp.name);}}
                       style={{fontSize:13,fontWeight:700,color:'#374151',cursor:'text'}}
@@ -763,10 +763,10 @@ function TableView({ groups, tasks, members, projectId, onAddGroup, onTaskClick,
 
       {/* Add group */}
       <button onClick={onAddGroup}
-        style={{display:'flex',alignItems:'center',gap:6,fontSize:13,fontWeight:600,color:'#6366f1',
-                background:'transparent',border:'1px dashed #c7d2fe',borderRadius:8,padding:'8px 16px',
+        style={{display:'flex',alignItems:'center',gap:6,fontSize:13,fontWeight:600,color:'#18181b',
+                background:'transparent',border:'1px dashed #d4d4d8',borderRadius:8,padding:'8px 16px',
                 cursor:'pointer',marginTop:8,transition:'all 0.15s'}}
-        onMouseEnter={e=>{e.currentTarget.style.background='#eef2ff';}}
+        onMouseEnter={e=>{e.currentTarget.style.background='#f4f4f5';}}
         onMouseLeave={e=>{e.currentTarget.style.background='transparent';}}>
         <span style={{fontSize:18,lineHeight:1}}>+</span> Add Group
       </button>
@@ -798,8 +798,8 @@ function TaskRow({ task, members, onClick, onUpdate, isLast,
       onMouseLeave={() => setHov(false)}
       style={{
         display:'grid', gridTemplateColumns:GRID,
-        borderTop: isDragOver ? '2px solid #6366f1' : '1px solid #f3f4f6',
-        background: isDragging ? '#eef2ff' : hov ? '#f9fafb' : '#fff',
+        borderTop: isDragOver ? '2px solid #18181b' : '1px solid #f3f4f6',
+        background: isDragging ? '#f4f4f5' : hov ? '#f9fafb' : '#fff',
         minHeight:40, alignItems:'center',
         opacity: isDragging ? 0.45 : 1,
         transition:'background 0.1s',
@@ -855,7 +855,7 @@ function TaskRow({ task, members, onClick, onUpdate, isLast,
               if (e.key === 'Enter') { onUpdate({due_date: e.target.value || null}); setEditingDate(false); }
             }}
             onClick={e => e.stopPropagation()}
-            style={{fontSize:11,border:'1px solid #6366f1',borderRadius:5,padding:'3px 5px',
+            style={{fontSize:11,border:'1px solid #18181b',borderRadius:5,padding:'3px 5px',
                     outline:'none',width:108,cursor:'pointer',background:'#fff'}}
           />
         ) : (
@@ -992,8 +992,8 @@ function TimelineView({ tasks, groups }) {
             {weeks.map((w,wi)=>{
               const isCurrentWeek = w <= today && today < new Date(w.getTime()+7*86400000);
               return (
-                <div key={wi} style={{width:CELL_W*7,flexShrink:0,borderRight:'1px solid #e9ecef',padding:'8px 4px',textAlign:'center',background:isCurrentWeek?'#eef2ff':'transparent'}}>
-                  <div style={{fontSize:10,fontWeight:700,color:isCurrentWeek?'#6366f1':'#9ca3af',textTransform:'uppercase',letterSpacing:'0.05em'}}>{w.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
+                <div key={wi} style={{width:CELL_W*7,flexShrink:0,borderRight:'1px solid #e9ecef',padding:'8px 4px',textAlign:'center',background:isCurrentWeek?'#f4f4f5':'transparent'}}>
+                  <div style={{fontSize:10,fontWeight:700,color:isCurrentWeek?'#18181b':'#9ca3af',textTransform:'uppercase',letterSpacing:'0.05em'}}>{w.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
                 </div>
               );
             })}
@@ -1023,7 +1023,7 @@ function TimelineView({ tasks, groups }) {
                   <div style={{flex:1,position:'relative',height:'100%',overflow:'hidden'}}>
                     {/* Today line */}
                     {todayOffset>=0 && todayOffset<=days && (
-                      <div style={{position:'absolute',left:todayOffset*CELL_W+CELL_W/2,top:0,bottom:0,width:2,background:'#6366f1',opacity:0.6,zIndex:3}}/>
+                      <div style={{position:'absolute',left:todayOffset*CELL_W+CELL_W/2,top:0,bottom:0,width:2,background:'#18181b',opacity:0.6,zIndex:3}}/>
                     )}
                     {/* Weekend shading */}
                     {Array.from({length:days}).map((_,di)=>{
@@ -1060,9 +1060,9 @@ function Sidebar({ projects, selectedId, onSelect, onNewProject }) {
       {/* Logo */}
       <div style={{padding:'20px 16px 12px',borderBottom:'1px solid rgba(255,255,255,0.06)'}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
-          <div style={{width:34,height:34,background:'linear-gradient(135deg,#6366f1,#8b5cf6)',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>⚡</div>
+          <div style={{width:34,height:34,background:'linear-gradient(135deg,#27272a,#3f3f46)',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>⚡</div>
           <div>
-            <div style={{fontSize:15,fontWeight:700,color:'#f1f5f9'}}>DataFlow</div>
+            <div style={{fontSize:15,fontWeight:700,color:'#f1f5f9'}}>Joe.com</div>
             <div style={{fontSize:11,color:'#64748b'}}>Engineering Tracker</div>
           </div>
         </div>
@@ -1074,9 +1074,9 @@ function Sidebar({ projects, selectedId, onSelect, onNewProject }) {
         {projects.map(p=>{
           const active = p.id===selectedId;
           return (
-            <div key={p.id} onClick={()=>onSelect(p.id)} onMouseEnter={()=>setHov(p.id)} onMouseLeave={()=>setHov(null)} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:8,cursor:'pointer',marginBottom:2,background:active?'rgba(99,102,241,0.2)':hov===p.id?'rgba(255,255,255,0.05)':'transparent',transition:'all 0.1s'}}>
-              <span style={{width:8,height:8,borderRadius:'50%',background:p.color||'#6366f1',flexShrink:0}}/>
-              <span style={{fontSize:13,fontWeight:active?600:400,color:active?'#e0e7ff':'#94a3b8',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</span>
+            <div key={p.id} onClick={()=>onSelect(p.id)} onMouseEnter={()=>setHov(p.id)} onMouseLeave={()=>setHov(null)} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:8,cursor:'pointer',marginBottom:2,background:active?'rgba(255,255,255,0.1)':hov===p.id?'rgba(255,255,255,0.05)':'transparent',transition:'all 0.1s'}}>
+              <span style={{width:8,height:8,borderRadius:'50%',background:p.color||'#18181b',flexShrink:0}}/>
+              <span style={{fontSize:13,fontWeight:active?600:400,color:active?'#f1f5f9':'#94a3b8',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</span>
             </div>
           );
         })}
@@ -1084,7 +1084,7 @@ function Sidebar({ projects, selectedId, onSelect, onNewProject }) {
 
       {/* Bottom actions */}
       <div style={{padding:'8px',borderTop:'1px solid rgba(255,255,255,0.06)'}}>
-        <button onClick={onNewProject} style={{display:'flex',alignItems:'center',gap:6,width:'100%',padding:'8px 10px',borderRadius:8,background:'transparent',border:'1px dashed rgba(99,102,241,0.4)',color:'#818cf8',fontSize:12,fontWeight:600,cursor:'pointer',marginBottom:8,justifyContent:'center',transition:'all 0.15s'}} onMouseEnter={e=>{e.currentTarget.style.background='rgba(99,102,241,0.1)';}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';}}>
+        <button onClick={onNewProject} style={{display:'flex',alignItems:'center',gap:6,width:'100%',padding:'8px 10px',borderRadius:8,background:'transparent',border:'1px dashed rgba(255,255,255,0.2)',color:'#94a3b8',fontSize:12,fontWeight:600,cursor:'pointer',marginBottom:8,justifyContent:'center',transition:'all 0.15s'}} onMouseEnter={e=>{e.currentTarget.style.background='rgba(255,255,255,0.07)';}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';}}>
           + New Project
         </button>
         {link && (
@@ -1101,7 +1101,7 @@ function Sidebar({ projects, selectedId, onSelect, onNewProject }) {
             )}
           </>
         )}
-        <div style={{textAlign:'center',padding:'6px 0 2px',fontSize:10,color:'#334155'}}>DataFlow v1.0</div>
+        <div style={{textAlign:'center',padding:'6px 0 2px',fontSize:10,color:'#334155'}}>Joe.com v1.0</div>
       </div>
     </div>
   );
@@ -1124,11 +1124,11 @@ function AddProjectModal({ onClose, onCreate }) {
         <div style={{background:'#fff',borderRadius:14,padding:28,width:360,boxShadow:'0 20px 50px rgba(0,0,0,0.2)'}}>
           <h3 style={{fontSize:17,fontWeight:700,color:'#111',marginBottom:20}}>New Project</h3>
           <label style={{fontSize:12,fontWeight:600,color:'#6b7280',display:'block',marginBottom:5}}>Project Name</label>
-          <input autoFocus value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} placeholder="e.g. Data Platform Q2" style={{width:'100%',border:'1px solid #e5e7eb',borderRadius:8,padding:'9px 12px',fontSize:14,outline:'none',marginBottom:16}} onFocus={e=>e.target.style.borderColor='#6366f1'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
+          <input autoFocus value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} placeholder="e.g. Data Platform Q2" style={{width:'100%',border:'1px solid #e5e7eb',borderRadius:8,padding:'9px 12px',fontSize:14,outline:'none',marginBottom:16}} onFocus={e=>e.target.style.borderColor='#18181b'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
           <label style={{fontSize:12,fontWeight:600,color:'#6b7280',display:'block',marginBottom:8}}>Color</label>
           <div style={{display:'flex',gap:8,marginBottom:20}}>
             {GRP_COLORS.map(c=>(
-              <button key={c} onClick={()=>setColor(c)} style={{width:24,height:24,borderRadius:'50%',background:c,border:c===color?'2px solid #1e1b4b':'2px solid transparent',cursor:'pointer',outline:c===color?'2px solid #6366f1':'none',outlineOffset:2}}/>
+              <button key={c} onClick={()=>setColor(c)} style={{width:24,height:24,borderRadius:'50%',background:c,border:c===color?'2px solid #09090b':'2px solid transparent',cursor:'pointer',outline:c===color?'2px solid #18181b':'none',outlineOffset:2}}/>
             ))}
           </div>
           <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
@@ -1158,11 +1158,11 @@ function AddGroupModal({ onClose, onCreate }) {
         <div style={{background:'#fff',borderRadius:14,padding:28,width:360,boxShadow:'0 20px 50px rgba(0,0,0,0.2)'}}>
           <h3 style={{fontSize:17,fontWeight:700,color:'#111',marginBottom:20}}>New Group</h3>
           <label style={{fontSize:12,fontWeight:600,color:'#6b7280',display:'block',marginBottom:5}}>Group Name</label>
-          <input autoFocus value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} placeholder="e.g. Sprint 1, In Flight, Backlog" style={{width:'100%',border:'1px solid #e5e7eb',borderRadius:8,padding:'9px 12px',fontSize:14,outline:'none',marginBottom:16}} onFocus={e=>e.target.style.borderColor='#6366f1'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
+          <input autoFocus value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} placeholder="e.g. Sprint 1, In Flight, Backlog" style={{width:'100%',border:'1px solid #e5e7eb',borderRadius:8,padding:'9px 12px',fontSize:14,outline:'none',marginBottom:16}} onFocus={e=>e.target.style.borderColor='#18181b'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
           <label style={{fontSize:12,fontWeight:600,color:'#6b7280',display:'block',marginBottom:8}}>Color</label>
           <div style={{display:'flex',gap:8,marginBottom:20}}>
             {GRP_COLORS.map(c=>(
-              <button key={c} onClick={()=>setColor(c)} style={{width:24,height:24,borderRadius:'50%',background:c,border:c===color?'2px solid #1e1b4b':'2px solid transparent',cursor:'pointer',outline:c===color?'2px solid #6366f1':'none',outlineOffset:2}}/>
+              <button key={c} onClick={()=>setColor(c)} style={{width:24,height:24,borderRadius:'50%',background:c,border:c===color?'2px solid #09090b':'2px solid transparent',cursor:'pointer',outline:c===color?'2px solid #18181b':'none',outlineOffset:2}}/>
             ))}
           </div>
           <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
@@ -1246,7 +1246,7 @@ function MembersModal({ members, onClose, onAdd, onUpdate, onDelete }) {
                     <input autoFocus value={editName} onChange={e=>setEditName(e.target.value)}
                       onKeyDown={e=>{if(e.key==='Enter')saveEdit(m.id);if(e.key==='Escape')cancelEdit();}}
                       placeholder="Full name"
-                      style={{...iStyle,fontWeight:600,marginBottom:6,borderColor:'#6366f1'}}/>
+                      style={{...iStyle,fontWeight:600,marginBottom:6,borderColor:'#18181b'}}/>
                     <input value={editRole} onChange={e=>setEditRole(e.target.value)}
                       onKeyDown={e=>{if(e.key==='Enter')saveEdit(m.id);if(e.key==='Escape')cancelEdit();}}
                       placeholder="Role (e.g. Data Engineer)"
@@ -1289,13 +1289,13 @@ function MembersModal({ members, onClose, onAdd, onUpdate, onDelete }) {
               onKeyDown={e=>e.key==='Enter'&&submitAdd()}
               placeholder="Full name"
               style={{...iStyle,marginBottom:8}}
-              onFocus={e=>e.target.style.borderColor='#6366f1'}
+              onFocus={e=>e.target.style.borderColor='#18181b'}
               onBlur={e=>e.target.style.borderColor='#d1d5db'}/>
             <input value={role} onChange={e=>setRole(e.target.value)}
               onKeyDown={e=>e.key==='Enter'&&submitAdd()}
               placeholder="Role (e.g. Data Engineer)"
               style={{...iStyle,marginBottom:12}}
-              onFocus={e=>e.target.style.borderColor='#6366f1'}
+              onFocus={e=>e.target.style.borderColor='#18181b'}
               onBlur={e=>e.target.style.borderColor='#d1d5db'}/>
             <Btn onClick={submitAdd} variant="primary" disabled={!name.trim()}>Add Member</Btn>
           </div>
@@ -1469,7 +1469,7 @@ function App() {
           {selectedProject && (
             <>
               <div style={{display:'flex',alignItems:'center',gap:8,marginRight:4}}>
-                <span style={{width:12,height:12,borderRadius:'50%',background:selectedProject.color||'#6366f1',display:'inline-block'}}/>
+                <span style={{width:12,height:12,borderRadius:'50%',background:selectedProject.color||'#18181b',display:'inline-block'}}/>
                 <span style={{fontSize:16,fontWeight:700,color:'#111'}}>{selectedProject.name}</span>
               </div>
               {/* Stats chips */}
@@ -1515,7 +1515,7 @@ function App() {
               {PRIORITIES.map(p=><option key={p} value={p}>{p}</option>)}
             </select>
             {(search||filterStatus||filterPriority) && (
-              <button onClick={()=>{setSearch('');setFilterStatus('');setFilterPriority('');}} style={{fontSize:12,color:'#6366f1',background:'transparent',border:'none',cursor:'pointer',fontWeight:600}}>✕ Clear</button>
+              <button onClick={()=>{setSearch('');setFilterStatus('');setFilterPriority('');}} style={{fontSize:12,color:'#18181b',background:'transparent',border:'none',cursor:'pointer',fontWeight:600}}>✕ Clear</button>
             )}
             <span style={{marginLeft:'auto',fontSize:12,color:'#9ca3af'}}>{filteredTasks.length}/{tasks.length} tasks</span>
           </div>

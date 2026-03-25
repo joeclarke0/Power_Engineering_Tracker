@@ -5,6 +5,18 @@ Format: `## [version] — YYYY-MM-DD` followed by what changed.
 
 ---
 
+## [1.0.4] — 2026-03-25
+
+### Branding & theme
+
+- **Renamed to Joe.com** — browser tab, setup screen, sidebar, and footer all updated
+- **Replaced purple brand colour** — all indigo/violet UI chrome (`#6366f1`, `#4f46e5`, `#8b5cf6`) replaced with a dark charcoal/near-black palette (`#18181b`, `#27272a`, `#3f3f46`)
+- Setup screen background changed from deep purple gradient to near-black
+- Sidebar active project highlight, New Project button, focus rings and interactive accents all updated to dark greys
+- Status, priority, and group/member colours are unchanged
+
+---
+
 ## [1.0.3] — 2026-03-25
 
 ### New features
