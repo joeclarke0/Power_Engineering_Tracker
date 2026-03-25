@@ -1231,7 +1231,7 @@ function MembersModal({ members, onClose, onAdd, onUpdate, onDelete }) {
             {members.map(m => (
               <div key={m.id}
                 onMouseEnter={() => setHoverId(m.id)}
-                onMouseLeave={() => setHoverId(null)}
+                onMouseLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setHoverId(null); }}
                 style={{display:'flex',alignItems:'flex-start',gap:10,padding:'10px 0',
                         borderBottom:'1px solid #f3f4f6'}}>
 
@@ -1263,9 +1263,10 @@ function MembersModal({ members, onClose, onAdd, onUpdate, onDelete }) {
                       <div style={{fontSize:13,fontWeight:600,color:'#374151'}}>{m.name}</div>
                       <div style={{fontSize:11,color:'#9ca3af',marginTop:1}}>{m.role || <span style={{fontStyle:'italic'}}>No role set</span>}</div>
                     </div>
-                    {/* Action buttons — fade in on hover */}
-                    <div style={{display:'flex',gap:4,alignItems:'center',
-                                 opacity:hoverId===m.id?1:0,transition:'opacity 0.15s',flexShrink:0}}>
+                    {/* Action buttons — show only on hover */}
+                    <div style={{display:'flex',gap:4,alignItems:'center',flexShrink:0,
+                                 opacity: hoverId===m.id ? 1 : 0,
+                                 pointerEvents: hoverId===m.id ? 'auto' : 'none'}}>
                       <button onClick={()=>startEdit(m)} title="Edit member"
                         style={{background:'#f3f4f6',border:'none',borderRadius:5,width:26,height:26,
                                 cursor:'pointer',fontSize:12,display:'flex',alignItems:'center',
