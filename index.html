@@ -369,6 +369,31 @@ function Btn({ onClick, children, variant='default', small, disabled, style: s }
 }
 
 /* ================================================================
+   LOGO — "J" data-pipeline mark
+   Stem (source node → mid-flow dot → destination node) forms a J.
+   viewBox is always 0 0 34 34 so rx and stroke coords scale naturally.
+================================================================ */
+function Logo({ size=34 }) {
+  return (
+    <svg viewBox="0 0 34 34" width={size} height={size} fill="none"
+         xmlns="http://www.w3.org/2000/svg" style={{display:'block',flexShrink:0}}>
+      {/* Background tile */}
+      <rect width="34" height="34" rx="8" fill="#27272a"/>
+      {/* J pipeline path — stem then hook to the left */}
+      <path d="M 22 7 L 22 22 Q 22 28 16 28 Q 10 28 10 23"
+        stroke="white" strokeWidth="2.6" strokeLinecap="round"
+        strokeLinejoin="round" fill="none"/>
+      {/* Source node — top of the J */}
+      <circle cx="22" cy="7" r="3.2" fill="white"/>
+      {/* Mid-flow dot — subtle pipeline indicator */}
+      <circle cx="22" cy="16" r="1.8" fill="white" fillOpacity="0.32"/>
+      {/* Destination node — end of the J hook, green = task complete */}
+      <circle cx="10" cy="23" r="3.2" fill="#10b981"/>
+    </svg>
+  );
+}
+
+/* ================================================================
    SETUP SCREEN
 ================================================================ */
 function SetupScreen({ onDone }) {
@@ -398,7 +423,9 @@ function SetupScreen({ onDone }) {
     <div style={{minHeight:'100vh',background:'linear-gradient(135deg,#09090b 0%,#18181b 50%,#09090b 100%)',display:'flex',alignItems:'center',justifyContent:'center',padding:24}}>
       <div style={{background:'#fff',borderRadius:16,padding:40,maxWidth:520,width:'100%',boxShadow:'0 25px 60px rgba(0,0,0,0.3)'}}>
         <div style={{textAlign:'center',marginBottom:32}}>
-          <div style={{width:56,height:56,background:'linear-gradient(135deg,#27272a,#3f3f46)',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:28}}>⚡</div>
+          <div style={{margin:'0 auto 16px',width:56,height:56}}>
+            <Logo size={56}/>
+          </div>
           <h1 style={{fontSize:24,fontWeight:700,color:'#09090b',marginBottom:6}}>Joe.com</h1>
           <p style={{color:'#6b7280',fontSize:14}}>Engineering Tracker — connect your Supabase database to get started</p>
         </div>
@@ -1060,7 +1087,7 @@ function Sidebar({ projects, selectedId, onSelect, onNewProject }) {
       {/* Logo */}
       <div style={{padding:'20px 16px 12px',borderBottom:'1px solid rgba(255,255,255,0.06)'}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
-          <div style={{width:34,height:34,background:'linear-gradient(135deg,#27272a,#3f3f46)',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>⚡</div>
+          <Logo size={34}/>
           <div>
             <div style={{fontSize:15,fontWeight:700,color:'#f1f5f9'}}>Joe.com</div>
             <div style={{fontSize:11,color:'#64748b'}}>Engineering Tracker</div>

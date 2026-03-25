@@ -5,6 +5,14 @@ Format: `## [version] — YYYY-MM-DD` followed by what changed.
 
 ---
 
+## [1.0.5] — 2026-03-25
+
+### Branding
+
+- **Custom SVG logo** — lightning bolt removed; replaced with a bespoke "J" data-pipeline mark: a white source node at the top, a subtle mid-flow dot, and a green destination node at the end of the hook (representing data engineering + task completion). Renders crisply at all sizes via scalable viewBox.
+
+---
+
 ## [1.0.4] — 2026-03-25
 
 ### Branding & theme
